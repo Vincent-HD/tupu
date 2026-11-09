@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnostics": true,
+        "diagnosticSeverity": {
+          "unstableApiUsage": "off",
+          "multipleEffectProvide": "warning",
+          "globalErrorInEffectCatch": "warning",
+          "globalErrorInEffectFailure": "warning",
+          "floatingEffect": "error",
+          "missingEffectError": "error",
+          "missingEffectContext": "error",
+          "missingLayerContext": "error",
+          "genericEffectServices": "error",
+          "classSelfMismatch": "error",
+          "effectFnImplicitAny": "error",
+          "outdatedApi": "error"
+        }
+      }
+    ]
+  }
+}
