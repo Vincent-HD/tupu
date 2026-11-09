@@ -163,19 +163,8 @@ body::before {
   height: calc(100cqw / var(--size) * 0.22);
 }
 
-.dog-ear {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  width: calc(100cqw / var(--size) * 0.26);
-  height: calc(100cqw / var(--size) * 0.26);
-  background: linear-gradient(
-    225deg,
-    var(--paper) 0 50%,
-    rgb(from var(--ink) r g b / 0.85) 50% 54%,
-    rgb(255 255 255 / 0.55) 54%
-  );
-  border-bottom-left-radius: 4px;
+.fold-clip {
+  clip-path: polygon(-20% -20%, 48% -20%, 120% 52%, 120% 120%, -20% 120%);
 }
 
 .given-number::after {

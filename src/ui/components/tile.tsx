@@ -29,13 +29,28 @@ export interface TileProps {
 export const Tile = (props: TileProps) => {
   const color = props.color === null ? null : colorAt(props.color);
   const { marks } = props;
-  const ring = marks.has("hint")
-    ? "animate-pulse-marker z-10"
+  const folded = props.givenColor;
+  const raise = marks.has("hint")
+    ? "hint"
     : marks.has("lens-hit")
-      ? "z-10 -translate-x-0.5 -translate-y-0.5 shadow-[0_0_0_3px_var(--marker),5px_5px_0_3px_var(--shadow)]"
+      ? "lens-hit"
       : marks.has("selected")
-        ? "z-10 -translate-x-0.5 -translate-y-0.5 shadow-[0_0_0_3px_var(--marker),6px_6px_0_3px_var(--shadow)]"
-        : "shadow-hard-sm";
+        ? "selected"
+        : null;
+  const lift =
+    raise === "lens-hit" || raise === "selected" ? "-translate-x-0.5 -translate-y-0.5" : "";
+  const ring = folded
+    ? `${raise ? "z-10" : ""} ${lift}`
+    : raise === "hint"
+      ? "animate-pulse-marker z-10"
+      : raise === "lens-hit"
+        ? `z-10 ${lift} shadow-[0_0_0_3px_var(--marker),5px_5px_0_3px_var(--shadow)]`
+        : raise === "selected"
+          ? `z-10 ${lift} shadow-[0_0_0_3px_var(--marker),6px_6px_0_3px_var(--shadow)]`
+          : "shadow-hard-sm";
+  const danger = marks.has("conflict") || marks.has("wrong");
+  const fill = color && !marks.has("lens-maybe") ? color.fill : "var(--card)";
+  const overlayClip = folded ? "fold-clip" : "";
   return (
     <button
       type="button"
@@ -43,15 +58,25 @@ export const Tile = (props: TileProps) => {
       aria-pressed={marks.has("selected")}
       onClick={props.onSelect}
       className={`relative flex aspect-square cursor-pointer items-center justify-center rounded-[14%] border-[2.5px] transition-[transform,box-shadow] duration-100 ${
-        marks.has("conflict") || marks.has("wrong") ? "border-danger" : "border-ink"
+        folded ? "border-transparent" : danger ? "border-danger" : "border-ink"
       } ${ring} ${marks.has("conflict") && props.animate ? "animate-wiggle" : ""} ${
         marks.has("lens-dim") ? "opacity-20 saturate-0" : ""
       } ${marks.has("lens-maybe") ? "border-dashed" : ""} transition-[opacity,filter]`}
-      style={{ backgroundColor: color && !marks.has("lens-maybe") ? color.fill : "var(--card)" }}
+      style={{ backgroundColor: folded ? "transparent" : fill }}
     >
+      {folded && (
+        <FoldedFrame
+          fill={fill}
+          stroke={danger ? "var(--danger)" : "var(--ink)"}
+          dashed={marks.has("lens-maybe")}
+          ring={raise !== null}
+          pulse={raise === "hint"}
+          shadow={raise === "selected" ? 6 : raise === "lens-hit" ? 5 : raise === "hint" ? 4 : 2}
+        />
+      )}
       {marks.has("lens-maybe") && (
         <>
-          <span className="hatch absolute inset-0 rounded-[12%]" />
+          <span className={`hatch absolute inset-0 rounded-[12%] ${overlayClip}`} />
           <span className="absolute right-[8%] bottom-[4%] font-display text-[0.7rem] font-extrabold text-ink-soft">
             ?
           </span>
@@ -59,15 +84,18 @@ export const Tile = (props: TileProps) => {
       )}
       {!color && marks.has("related") && <span className="hatch absolute inset-0 rounded-[12%]" />}
       {color && marks.has("related") && (
-        <span className="absolute inset-[3px] rounded-[12%] border-2 border-dashed border-ink/40" />
+        <span
+          className={`absolute inset-[3px] rounded-[12%] border-2 border-dashed border-ink/40 ${overlayClip}`}
+        />
       )}
       {marks.has("reason") && (
-        <span className="absolute -inset-1 rounded-[16%] border-[3px] border-dashed border-ink/70" />
+        <span
+          className={`absolute -inset-1 rounded-[16%] border-[3px] border-dashed border-ink/70 ${overlayClip}`}
+        />
       )}
       {marks.has("pair") && (
         <span className="absolute inset-[18%] rounded-full border-[3px] border-ink/70" />
       )}
-      {props.givenColor && <span className="dog-ear" />}
       {props.number !== null && (
         <span
           key={props.popKey}
@@ -90,7 +118,7 @@ export const Tile = (props: TileProps) => {
               d="M5 5l14 14M19 5L5 19"
               stroke="currentColor"
               strokeWidth={3}
-              strokeLinecap="round"
+              strokeLinecap="butt"
             />
           </svg>
         </span>
@@ -98,3 +126,62 @@ export const Tile = (props: TileProps) => {
     </button>
   );
 };
+
+const fold = 32;
+const corner = 13;
+const join = 5;
+const flapCorner = 7;
+const crease = 100 - fold;
+const slant = join / Math.SQRT2;
+const outline = `M${corner} 0H${crease - join}Q${crease} 0 ${crease + slant} ${slant}L${100 - slant} ${fold - slant}Q100 ${fold} 100 ${fold + join}V${100 - corner}A${corner} ${corner} 0 0 1 ${100 - corner} 100H${corner}A${corner} ${corner} 0 0 1 0 ${100 - corner}V${corner}A${corner} ${corner} 0 0 1 ${corner} 0Z`;
+const flapLegs = `M${crease} 1V${fold - flapCorner}Q${crease} ${fold} ${crease + flapCorner} ${fold}H99`;
+const flap = `${flapLegs}L${crease} 1Z`;
+
+const FoldedFrame = (props: {
+  fill: string;
+  stroke: string;
+  dashed: boolean;
+  ring: boolean;
+  pulse: boolean;
+  shadow: number;
+}) => (
+  <svg
+    className="pointer-events-none absolute -inset-[1.25px] overflow-visible transition-[filter] duration-100"
+    viewBox="0 0 100 100"
+    preserveAspectRatio="none"
+    aria-hidden="true"
+    style={{ filter: `drop-shadow(${props.shadow}px ${props.shadow}px 0 var(--shadow))` }}
+  >
+    {props.ring && (
+      <path
+        d={outline}
+        fill="var(--marker)"
+        stroke="var(--marker)"
+        strokeWidth={8.5}
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+        className={props.pulse ? "animate-pulse" : ""}
+      />
+    )}
+    <path d={outline} fill={props.fill} />
+    <path d={flap} fill="rgb(255 255 255 / 0.55)" />
+    <path
+      d={flapLegs}
+      fill="none"
+      stroke={props.stroke}
+      strokeWidth={3}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      vectorEffect="non-scaling-stroke"
+    />
+    <path
+      d={outline}
+      fill="none"
+      stroke={props.stroke}
+      strokeWidth={2.5}
+      strokeLinejoin="round"
+      strokeDasharray={props.dashed ? "6 4" : undefined}
+      vectorEffect="non-scaling-stroke"
+    />
+  </svg>
+);
