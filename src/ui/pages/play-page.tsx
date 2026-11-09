@@ -1,9 +1,12 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
+import { useHotkey, useHotkeys, type UseHotkeyDefinition } from "@tanstack/react-hotkeys";
+import { useDebouncer } from "@tanstack/react-pacer";
+import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { difficultyLabels, levelLabels } from "../../domain/difficulty.ts";
 import { isGiven } from "../../domain/game.ts";
 import { explain } from "../../domain/hints.ts";
-import { colorAt, tileColors } from "../../domain/palette.ts";
+import { colorAt } from "../../domain/palette.ts";
 import { checkPenaltyMs, formatDuration, hintPenaltyMs, isPerfect } from "../../domain/score.ts";
 import {
   createSession,
@@ -13,29 +16,26 @@ import {
   type Session,
 } from "../../domain/session.ts";
 import { findConflicts, type Layer } from "../../domain/solver.ts";
-import type { CompletionResult, GameRecord } from "../../services/games.ts";
-import { completeGameAtom, gameAtom, saveGameAtom, startGameAtom } from "../atoms.ts";
+import { lensView, noFocus, placedCount, type LensFocus } from "../../domain/lens.ts";
+import type { GameRecord, GameSnapshot, StartGame } from "../../services/games.ts";
+import { actions, gameQuery } from "../queries.ts";
 import { Board } from "../components/board.tsx";
 import { Confetti } from "../components/confetti.tsx";
 import { Icon } from "../components/icons.tsx";
 import { Keypad } from "../components/keypad.tsx";
 import { PairMatrix } from "../components/pair-matrix.tsx";
 import type { TileMark } from "../components/tile.tsx";
-import { Button, Card, Chip, IconButton, Loaded, Modal } from "../components/ui.tsx";
+import { Button, Card, Chip, IconButton, Modal } from "../components/ui.tsx";
 import { useSettings } from "../hooks/use-settings.ts";
 import { useSound } from "../hooks/use-sound.ts";
 import { usePageVisible, useStopwatch } from "../hooks/use-stopwatch.ts";
 import { useWakeLock } from "../hooks/use-wake-lock.ts";
-import { navigate } from "../router.ts";
+import { colorKeyCodes, digitKeyCodes, numpadKeyCodes, useColorKeyLabels } from "../keyboard.ts";
 import { detach } from "../detach.ts";
 
 export const PlayPage = ({ id }: { id: string }) => {
-  const result = useAtomValue(gameAtom(id));
-  return (
-    <Loaded result={result} label="Preparing the puzzle">
-      {(game) => <GameView key={game.id} game={game} />}
-    </Loaded>
-  );
+  const game = useSuspenseQuery(gameQuery(id)).data;
+  return <GameView key={game.id} game={game} />;
 };
 
 export const modeTitle = (game: Pick<GameRecord, "mode" | "dailyDate">) =>
@@ -66,17 +66,33 @@ const shareText = (game: GameRecord, session: Session, elapsedMs: number) => {
 
 const GameView = ({ game }: { game: GameRecord }) => {
   const settings = useSettings();
+  const colorKeys = useColorKeyLabels(settings.keyboardLayout);
   const play = useSound();
-  const save = useAtomSet(saveGameAtom);
-  const complete = useAtomSet(completeGameAtom, { mode: "promise" });
-  const startGame = useAtomSet(startGameAtom, { mode: "promise" });
+  const navigate = useNavigate();
+  const saveDebouncer = useDebouncer(
+    (snapshot: GameSnapshot) => {
+      void actions.saveGame(snapshot);
+    },
+    { wait: 350, onUnmount: (debouncer) => debouncer.flush() },
+  );
+  const save = saveDebouncer.maybeExecute;
+  const complete = useMutation({
+    mutationFn: actions.completeGame,
+    onSettled: () => setShowResult(true),
+  });
+  const completion = complete.data ?? null;
+  const startNext = useMutation({
+    mutationFn: actions.startGame,
+    onSuccess: (gameId) => navigate({ to: "/play/$gameId", params: { gameId } }),
+  });
   const [session, dispatch] = useReducer(reduce, game, (record) => createSession(record));
   const [paused, setPaused] = useState(false);
+  const [lens, setLens] = useState(false);
+  const [lensFocus, setLensFocus] = useState<LensFocus>(noFocus);
   const [focusPair, setFocusPair] = useState<{
     readonly number: number;
     readonly color: number;
   } | null>(null);
-  const [completion, setCompletion] = useState<CompletionResult | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -107,25 +123,23 @@ const GameView = ({ game }: { game: GameRecord }) => {
 
   useEffect(() => {
     if (alreadySolved || session.solved) return;
-    const flush = () => save(snapshot(sessionRef.current));
+    const flush = () => {
+      saveDebouncer.cancel();
+      void actions.saveGame(snapshot(sessionRef.current));
+    };
     const interval = window.setInterval(flush, 15_000);
     window.addEventListener("pagehide", flush);
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("pagehide", flush);
     };
-  }, [alreadySolved, session.solved, save, snapshot]);
+  }, [alreadySolved, session.solved, saveDebouncer, snapshot]);
 
   useEffect(() => {
     if (!session.solved || alreadySolved) return;
     play("win");
-    complete(snapshot(session)).then(
-      (result) => {
-        setCompletion(result);
-        setShowResult(true);
-      },
-      () => setShowResult(true),
-    );
+    saveDebouncer.cancel();
+    complete.mutate(snapshot(session));
     // oxlint-disable-next-line react/exhaustive-deps
   }, [session.solved]);
 
@@ -135,12 +149,14 @@ const GameView = ({ game }: { game: GameRecord }) => {
       const next = reduce(current, action);
       dispatch(action);
       if (next === current) {
-        if (action.type === "place" || action.type === "clear") play("error");
+        if ((action.type === "place" || action.type === "clear") && current.selected !== null)
+          play("error");
         return;
       }
       switch (action.type) {
         case "select":
         case "move":
+        case "deselect":
           play("select");
           return;
         case "place": {
@@ -151,12 +167,14 @@ const GameView = ({ game }: { game: GameRecord }) => {
               null;
           if (cleared) play("erase");
           else play(action.layer, action.value);
+          const target = current.selected;
+          if (target === null) return;
           const conflicts = findConflicts(next.board).filter((conflict) =>
-            conflict.cells.includes(current.selected),
+            conflict.cells.includes(target),
           );
           if (!cleared && settings.showConflicts && conflicts.length > 0)
             window.setTimeout(() => play("error"), 120);
-          else if (!cleared && lineComplete(next.board, current.selected) && !next.solved)
+          else if (!cleared && lineComplete(next.board, target) && !next.solved)
             window.setTimeout(() => play("line"), 140);
           return;
         }
@@ -191,58 +209,67 @@ const GameView = ({ game }: { game: GameRecord }) => {
 
   const now = () => elapsed();
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
-        return;
-      if (paused && event.key !== "p") return;
-      const size = game.puzzle.size;
-      const key = event.key.toLowerCase();
-      if ((event.ctrlKey || event.metaKey) && key === "z") {
-        event.preventDefault();
-        act({ type: event.shiftKey ? "redo" : "undo", at: now() });
-        return;
-      }
-      if ((event.ctrlKey || event.metaKey) && key === "y") {
-        event.preventDefault();
-        act({ type: "redo", at: now() });
-        return;
-      }
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      const moves: Record<string, readonly [number, number]> = {
-        arrowup: [-1, 0],
-        arrowdown: [1, 0],
-        arrowleft: [0, -1],
-        arrowright: [0, 1],
-      };
-      const move = moves[key];
-      if (move) {
-        event.preventDefault();
-        act({ type: "move", rows: move[0], columns: move[1] });
-        return;
-      }
-      const digit = Number(key);
-      if (Number.isInteger(digit) && digit >= 1 && digit <= size) {
-        act({ type: "place", layer: "number", value: digit - 1, at: now() });
-        return;
-      }
-      const colorIndex = tileColors.slice(0, size).findIndex((color) => color.key === key);
-      if (colorIndex >= 0) {
-        act({ type: "place", layer: "color", value: colorIndex, at: now() });
-        return;
-      }
-      if (key === "backspace" || key === "delete" || key === "0") {
-        event.preventDefault();
-        act({ type: "clear", at: now() });
-        return;
-      }
-      if (key === "h") act({ type: "hint" });
-      if (key === "escape") act({ type: "dismiss-hint" });
-      if (key === "p") setPaused((value) => !value);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
+  const values = Array.from({ length: game.puzzle.size }, (_, value) => value);
+  const playing = !session.solved && !alreadySolved;
+  const lensOn = lens && playing;
+  const lensState = useMemo(
+    () => lensView(session.board, lensOn ? lensFocus : noFocus),
+    [session.board, lensOn, lensFocus],
+  );
+  const toggleLens = () => {
+    play("tap");
+    setLens((on) => !on);
+    setLensFocus(noFocus);
+  };
+  const focusValue = (layer: Layer, value: number) => {
+    play("select");
+    setLensFocus((current) =>
+      layer === "number"
+        ? { ...current, number: current.number === value ? null : value }
+        : { ...current, color: current.color === value ? null : value },
+    );
+  };
+  const place = (layer: Layer, value: number) =>
+    lensOn ? focusValue(layer, value) : act({ type: "place", layer, value, at: now() });
+  const escape = () => {
+    if (lensOn) {
+      if (lensState.active) setLensFocus(noFocus);
+      else setLens(false);
+      return;
+    }
+    const current = sessionRef.current;
+    act(current.hint || current.checkResult ? { type: "dismiss-hint" } : { type: "deselect" });
+  };
+  const shortcuts: Array<UseHotkeyDefinition> = [
+    { hotkey: "ArrowUp", callback: () => act({ type: "move", rows: -1, columns: 0 }) },
+    { hotkey: "ArrowDown", callback: () => act({ type: "move", rows: 1, columns: 0 }) },
+    { hotkey: "ArrowLeft", callback: () => act({ type: "move", rows: 0, columns: -1 }) },
+    { hotkey: "ArrowRight", callback: () => act({ type: "move", rows: 0, columns: 1 }) },
+    ...values.flatMap((value): Array<UseHotkeyDefinition> => {
+      const placeNumber = () => place("number", value);
+      const digit = digitKeyCodes[value] ?? "Digit1";
+      return [
+        { hotkey: `[${digit}]`, callback: placeNumber },
+        { hotkey: `Shift+[${digit}]`, callback: placeNumber },
+        { hotkey: `[${numpadKeyCodes[value] ?? "Numpad1"}]`, callback: placeNumber },
+        {
+          hotkey: `[${colorKeyCodes[value] ?? "KeyQ"}]`,
+          callback: () => place("color", value),
+        },
+      ];
+    }),
+    { hotkey: "Backspace", callback: () => act({ type: "clear", at: now() }) },
+    { hotkey: "Delete", callback: () => act({ type: "clear", at: now() }) },
+    { hotkey: "[Digit0]", callback: () => act({ type: "clear", at: now() }) },
+    { hotkey: "Mod+Z", callback: () => act({ type: "undo", at: now() }) },
+    { hotkey: "Mod+Shift+Z", callback: () => act({ type: "redo", at: now() }) },
+    { hotkey: "Mod+Y", callback: () => act({ type: "redo", at: now() }) },
+    { hotkey: "H", callback: () => act({ type: "hint" }) },
+    { hotkey: "Escape", callback: escape },
+    { hotkey: "L", callback: toggleLens, options: { enabled: playing } },
+  ];
+  useHotkeys(shortcuts, { enabled: !paused });
+  useHotkey("P", () => setPaused((value) => !value), { enabled: playing, requireReset: true });
 
   const marks = useMemo(() => {
     const map = new Map<number, Set<TileMark>>();
@@ -253,7 +280,17 @@ const GameView = ({ game }: { game: GameRecord }) => {
     };
     const { size } = game.puzzle;
     const { board, selected } = session;
-    if (settings.highlightRelated && !session.solved) {
+    if (lensState.active)
+      for (let cell = 0; cell < size * size; cell++)
+        add(
+          cell,
+          lensState.matches.has(cell)
+            ? "lens-hit"
+            : lensState.possible.has(cell)
+              ? "lens-maybe"
+              : "lens-dim",
+        );
+    if (settings.highlightRelated && !session.solved && selected !== null && !lensState.active) {
       const row = Math.floor(selected / size);
       const column = selected % size;
       const number = board.numbers[selected];
@@ -282,33 +319,35 @@ const GameView = ({ game }: { game: GameRecord }) => {
       add(session.hint.deduction.cell, "hint");
       for (const reason of session.hint.deduction.reasons) add(reason, "reason");
     }
-    if (!session.solved) add(selected, "selected");
+    if (!session.solved && selected !== null && !lensState.active) add(selected, "selected");
     return map;
-  }, [session, settings.highlightRelated, settings.showConflicts, focusPair, game.puzzle]);
+  }, [
+    session,
+    settings.highlightRelated,
+    settings.showConflicts,
+    focusPair,
+    game.puzzle,
+    lensState,
+  ]);
 
-  const lockedNumber = isGiven(game.puzzle, session.selected, "number");
-  const lockedColor = isGiven(game.puzzle, session.selected, "color");
-  const place = (layer: Layer, value: number) => act({ type: "place", layer, value, at: now() });
+  const lockedNumber =
+    session.selected === null || isGiven(game.puzzle, session.selected, "number");
+  const lockedColor = session.selected === null || isGiven(game.puzzle, session.selected, "color");
 
-  const playNext = async () => {
-    if (game.mode === "daily") return navigate({ page: "home" });
-    const id = await startGame(
-      game.mode === "quick" && game.difficulty
-        ? { mode: "quick", difficulty: game.difficulty }
-        : {
-            mode: "custom",
-            spec: {
-              size: game.puzzle.size,
-              level: game.puzzle.level,
-              density: game.puzzle.density,
-            },
-          },
-    );
-    navigate({ page: "play", id });
+  const nextGame: StartGame =
+    game.mode === "quick" && game.difficulty
+      ? { mode: "quick", difficulty: game.difficulty }
+      : {
+          mode: "custom",
+          spec: { size: game.puzzle.size, level: game.puzzle.level, density: game.puzzle.density },
+        };
+  const playNext = () => {
+    if (game.mode === "daily") return void navigate({ to: "/" });
+    startNext.mutate(nextGame);
   };
 
   const share = async () => {
-    const text = shareText(game, session, completion ? elapsed() : elapsed());
+    const text = shareText(game, session, alreadySolved ? game.elapsedMs : elapsed());
     try {
       if (navigator.share) await navigator.share({ text });
       else await navigator.clipboard.writeText(text);
@@ -328,7 +367,7 @@ const GameView = ({ game }: { game: GameRecord }) => {
   return (
     <div className="mx-auto w-full max-w-6xl">
       <header className="mb-3 flex items-center gap-2 sm:mb-5 sm:gap-3">
-        <IconButton icon="back" label="Back home" onClick={() => navigate({ page: "home" })} />
+        <IconButton icon="back" label="Back home" onClick={() => void navigate({ to: "/" })} />
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-display text-xl leading-tight font-extrabold sm:text-3xl">
             {modeTitle(game)}
@@ -370,7 +409,12 @@ const GameView = ({ game }: { game: GameRecord }) => {
                 shapes={settings.colorblindShapes}
                 animate={settings.animations}
                 popCell={session.lastChange}
-                onSelect={(cell) => act({ type: "select", cell })}
+                onSelect={(cell) =>
+                  lensState.active ? setLensFocus(noFocus) : act({ type: "select", cell })
+                }
+                gutters={
+                  lensOn ? { rows: lensState.missingRows, columns: lensState.missingColumns } : null
+                }
               />
             </Card>
             {paused && (
@@ -450,21 +494,51 @@ const GameView = ({ game }: { game: GameRecord }) => {
         <aside className="flex flex-col gap-4 sm:gap-5">
           {!session.solved && !alreadySolved && (
             <Card className="p-3 sm:p-4">
-              <SelectedSummary session={session} />
+              {lensOn ? (
+                <LensPanel
+                  focus={lensFocus}
+                  placed={lensState}
+                  size={game.puzzle.size}
+                  onClose={toggleLens}
+                />
+              ) : (
+                <SelectedSummary session={session} />
+              )}
               <Keypad
                 size={game.puzzle.size}
-                number={session.board.numbers[session.selected] ?? null}
-                color={session.board.colors[session.selected] ?? null}
-                lockedNumber={lockedNumber}
-                lockedColor={lockedColor}
+                number={
+                  lensOn
+                    ? lensFocus.number
+                    : session.selected === null
+                      ? null
+                      : (session.board.numbers[session.selected] ?? null)
+                }
+                color={
+                  lensOn
+                    ? lensFocus.color
+                    : session.selected === null
+                      ? null
+                      : (session.board.colors[session.selected] ?? null)
+                }
+                lockedNumber={!lensOn && lockedNumber}
+                lockedColor={!lensOn && lockedColor}
+                counts={
+                  lensOn
+                    ? {
+                        numbers: values.map((value) => placedCount(session.board, "number", value)),
+                        colors: values.map((value) => placedCount(session.board, "color", value)),
+                      }
+                    : undefined
+                }
                 shapes={settings.colorblindShapes}
+                colorKeys={colorKeys}
                 onNumber={(value) => place("number", value)}
                 onColor={(value) => place("color", value)}
               />
             </Card>
           )}
           {!session.solved && !alreadySolved && (
-            <div className="grid grid-cols-6 gap-2">
+            <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
               <IconButton
                 icon="undo"
                 label="Undo (Ctrl+Z)"
@@ -485,6 +559,14 @@ const GameView = ({ game }: { game: GameRecord }) => {
                 className="w-full"
                 disabled={lockedNumber && lockedColor}
                 onClick={() => act({ type: "clear", at: now() })}
+              />
+              <IconButton
+                icon="scan"
+                label={lensOn ? "Close the highlighter (L)" : "Highlight a number or color (L)"}
+                tone={lensOn ? "ink" : "paper"}
+                aria-pressed={lensOn}
+                className="w-full"
+                onClick={toggleLens}
               />
               <IconButton
                 icon="check"
@@ -513,13 +595,18 @@ const GameView = ({ game }: { game: GameRecord }) => {
               <p className="font-display text-2xl font-extrabold">Board complete.</p>
               <p className="mt-1">Solved in {formatDuration(finalElapsed)}.</p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Button icon="film" onClick={() => navigate({ page: "replay", id: game.id })}>
+                <Button
+                  icon="film"
+                  onClick={() =>
+                    void navigate({ to: "/replay/$gameId", params: { gameId: game.id } })
+                  }
+                >
                   Replay
                 </Button>
                 <Button icon="share" onClick={detach(share)}>
                   {copied ? "Copied!" : "Share"}
                 </Button>
-                <Button tone="ink" icon="play" onClick={detach(playNext)}>
+                <Button tone="ink" icon="play" disabled={startNext.isPending} onClick={playNext}>
                   {game.mode === "daily" ? "Home" : "Next"}
                 </Button>
               </div>
@@ -532,12 +619,8 @@ const GameView = ({ game }: { game: GameRecord }) => {
           )}
           <p className="hidden text-sm text-ink-soft lg:block">
             <Icon name="keyboard" className="mr-1 inline" /> Arrows move · 1–{game.puzzle.size}{" "}
-            numbers ·{" "}
-            {tileColors
-              .slice(0, game.puzzle.size)
-              .map((color) => color.key.toUpperCase())
-              .join(" ")}{" "}
-            colors · ⌫ erase · H hint · P pause
+            numbers · {colorKeys.slice(0, game.puzzle.size).join(" ")} colors · ⌫ erase · L
+            highlight · H hint · P pause
           </p>
         </aside>
       </div>
@@ -576,16 +659,19 @@ const GameView = ({ game }: { game: GameRecord }) => {
             </p>
           )}
           <div className="mt-6 flex flex-wrap gap-2">
-            <Button tone="ink" icon="play" onClick={detach(playNext)}>
+            <Button tone="ink" icon="play" disabled={startNext.isPending} onClick={playNext}>
               {game.mode === "daily" ? "Back home" : "Next puzzle"}
             </Button>
             <Button icon="share" onClick={detach(share)}>
               {copied ? "Copied!" : "Share"}
             </Button>
-            <Button icon="film" onClick={() => navigate({ page: "replay", id: game.id })}>
+            <Button
+              icon="film"
+              onClick={() => void navigate({ to: "/replay/$gameId", params: { gameId: game.id } })}
+            >
               Replay
             </Button>
-            <Button icon="trophy" onClick={() => navigate({ page: "leaderboard" })}>
+            <Button icon="trophy" onClick={() => void navigate({ to: "/leaderboard" })}>
               Board
             </Button>
           </div>
@@ -624,13 +710,76 @@ const Stat = ({ label, value, detail }: { label: string; value: string; detail: 
   </div>
 );
 
+const LensPanel = ({
+  focus,
+  placed,
+  size,
+  onClose,
+}: {
+  focus: LensFocus;
+  placed: {
+    readonly placed: number;
+    readonly missingRows: ReadonlySet<number>;
+    readonly missingColumns: ReadonlySet<number>;
+    readonly possible: ReadonlySet<number>;
+  };
+  size: number;
+  onClose: () => void;
+}) => {
+  const name = [
+    focus.color === null ? null : colorAt(focus.color).name,
+    focus.number === null ? null : `${focus.color === null ? "Number " : ""}${focus.number + 1}`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const list = (prefix: string, values: ReadonlySet<number>) =>
+    [...values].map((value) => `${prefix}${value + 1}`).join(", ");
+  const status =
+    focus.number === null && focus.color === null
+      ? "Pick a number, a color, or both."
+      : focus.number !== null && focus.color !== null
+        ? placed.placed > 0
+          ? `${name} is already on the board.`
+          : `${name} is not placed yet. Dashed tiles can still take it.`
+        : placed.missingRows.size === 0
+          ? `${name}: ${placed.placed}/${size} placed, complete.`
+          : `${name}: ${placed.placed}/${size} placed. Missing in ${list("L", placed.missingRows)} · ${list("C", placed.missingColumns)}.`;
+  return (
+    <div className="mb-3 flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2 rounded-xl bg-ink px-3 py-2 text-sm font-bold text-paper">
+        <span className="flex items-center gap-2">
+          <Icon name="scan" className="shrink-0 text-lg" /> Highlighter: the keypad finds instead of
+          placing
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 cursor-pointer rounded-lg border-2 border-paper px-2 py-0.5 text-xs font-extrabold"
+        >
+          Close
+        </button>
+      </div>
+      <p className="rounded-lg bg-ink/6 px-3 py-2 text-sm font-bold" role="status">
+        {status}
+      </p>
+    </div>
+  );
+};
+
 const SelectedSummary = ({ session }: { session: Session }) => {
   const { size } = session.puzzle;
-  const number = session.board.numbers[session.selected];
-  const color = session.board.colors[session.selected];
+  const { selected } = session;
+  if (selected === null)
+    return (
+      <p className="mb-3 text-sm font-bold text-ink-soft">
+        No tile selected. Tap one to fill it in.
+      </p>
+    );
+  const number = session.board.numbers[selected];
+  const color = session.board.colors[selected];
   return (
     <p className="mb-3 hidden text-sm font-bold text-ink-soft sm:block">
-      Row {Math.floor(session.selected / size) + 1}, column {(session.selected % size) + 1}
+      Row {Math.floor(selected / size) + 1}, column {(selected % size) + 1}
       {" · "}
       {number === null || number === undefined ? "no number" : `number ${number + 1}`}
       {", "}

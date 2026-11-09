@@ -2,7 +2,10 @@
   "$schema": "./node_modules/@effect/tsgo/oxlint-schema.json",
   "extends": ["./node_modules/@effect/tsgo/oxlint-presets/recommended.json"],
   "plugins": ["typescript", "unicorn", "oxc", "react", "effecttsgo"],
-  "options": { "typeAware": true, "reportUnusedDisableDirectives": "error" },
+  "options": {
+    "typeAware": true,
+    "reportUnusedDisableDirectives": "error"
+  },
   "rules": {
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": "error",
@@ -15,6 +18,7 @@
     "**/dist-server/**",
     "**/coverage/**",
     "**/.cache/**",
-    "**/generated/**"
+    "**/generated/**",
+    "src/routeTree.gen.ts"
   ]
 }

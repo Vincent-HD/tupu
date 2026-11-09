@@ -1,2 +1,6 @@
 minimumReleaseAgeExclude:
   - "@vitejs/plugin-react@6.3.0"
+  - "@tanstack/hotkeys@0.26.0"
+  - "@tanstack/react-hotkeys@0.22.3"
+allowBuilds:
+  workerd: false

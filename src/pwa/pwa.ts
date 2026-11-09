@@ -1,3 +1,4 @@
+import { createStore, useSelector } from "@tanstack/react-store";
 import { useSyncExternalStore } from "react";
 
 interface InstallPrompt extends Event {
@@ -11,21 +12,18 @@ interface PwaState {
   readonly installed: boolean;
 }
 
-let state: PwaState = {
+const pwaStore = createStore<PwaState>({
   updateReady: false,
   offlineReady: false,
   canInstall: false,
   installed:
     typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches,
-};
+});
+
 let waiting: ServiceWorker | null = null;
 let installPrompt: InstallPrompt | null = null;
-const listeners = new Set<() => void>();
 
-const update = (patch: Partial<PwaState>) => {
-  state = { ...state, ...patch };
-  for (const listener of listeners) listener();
-};
+const update = (patch: Partial<PwaState>) => pwaStore.setState((state) => ({ ...state, ...patch }));
 
 const isInstallPrompt = (event: Event): event is InstallPrompt =>
   "prompt" in event && typeof event.prompt === "function";
@@ -61,15 +59,14 @@ export const registerPwa = () => {
     registration.addEventListener("updatefound", () => {
       const installing = registration.installing;
       installing?.addEventListener("statechange", () => {
-        if (installing.state === "installed") {
-          if (navigator.serviceWorker.controller) trackWaiting(registration);
-          else update({ offlineReady: true });
-        }
+        if (installing.state !== "installed") return;
+        if (navigator.serviceWorker.controller) trackWaiting(registration);
+        else update({ offlineReady: true });
       });
     });
-    const check = () => void registration.update().catch(() => undefined);
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && navigator.onLine) check();
+      if (document.visibilityState === "visible" && navigator.onLine)
+        void registration.update().catch(() => undefined);
     });
   });
 };
@@ -83,12 +80,7 @@ export const promptInstall = async () => {
   update({ canInstall: false });
 };
 
-const subscribe = (listener: () => void) => {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-};
-
-export const usePwa = () => useSyncExternalStore(subscribe, () => state);
+export const usePwa = () => useSelector(pwaStore);
 
 const onlineSubscribe = (listener: () => void) => {
   window.addEventListener("online", listener);

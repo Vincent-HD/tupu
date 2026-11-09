@@ -1,32 +1,34 @@
-import { useAtomValue } from "@effect/atom-react";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { startingProgress, withValue, type Board as BoardState } from "../../domain/game.ts";
 import { formatDuration } from "../../domain/score.ts";
 import type { GameRecord } from "../../services/games.ts";
-import { gameAtom } from "../atoms.ts";
+import { gameQuery } from "../queries.ts";
 import { Board } from "../components/board.tsx";
 import type { TileMark } from "../components/tile.tsx";
-import { Card, IconButton, Loaded, Segmented, SectionTitle } from "../components/ui.tsx";
+import { Card, IconButton, Segmented, SectionTitle } from "../components/ui.tsx";
 import { useSettings } from "../hooks/use-settings.ts";
 import { useSound } from "../hooks/use-sound.ts";
-import { navigate } from "../router.ts";
 import { modeTitle } from "./play-page.tsx";
 
-export const ReplayPage = ({ id }: { id: string }) => (
-  <div className="mx-auto w-full max-w-4xl">
-    <div className="mb-6 flex items-center gap-3">
-      <IconButton
-        icon="back"
-        label="Back to the puzzle"
-        onClick={() => navigate({ page: "play", id })}
-      />
-      <SectionTitle kicker="Rewind">Replay</SectionTitle>
+export const ReplayPage = ({ id }: { id: string }) => {
+  const game = useSuspenseQuery(gameQuery(id)).data;
+  const navigate = useNavigate();
+  return (
+    <div className="mx-auto w-full max-w-4xl">
+      <div className="mb-6 flex items-center gap-3">
+        <IconButton
+          icon="back"
+          label="Back to the puzzle"
+          onClick={() => void navigate({ to: "/play/$gameId", params: { gameId: id } })}
+        />
+        <SectionTitle kicker="Rewind">Replay</SectionTitle>
+      </div>
+      <Replay game={game} />
     </div>
-    <Loaded result={useAtomValue(gameAtom(id))} label="Rewinding">
-      {(game) => <Replay game={game} />}
-    </Loaded>
-  </div>
-);
+  );
+};
 
 const Replay = ({ game }: { game: GameRecord }) => {
   const settings = useSettings();

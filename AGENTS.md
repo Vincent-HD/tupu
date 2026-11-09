@@ -7,7 +7,8 @@
 - Check examples against the version pinned in `package.json`. The installed version is authoritative when the reference clone or online documentation differs; Effect 4 unstable APIs can change between releases.
 - Prefer the existing Effect abstraction when it fits the requirements. Use `Effect.gen` and named `Effect.fn` operations for readable workflows, typed errors and schemas at boundaries, and scoped layers for resource lifetimes. Use `pipe` when it improves readability, not by default for every operation.
 - Persistence goes through the `Database` service (`src/db/database.ts`): build queries with Kysely and run them with `Database.rows`, `first`, `run` and `transaction`, which execute on the Effect `SqlClient`. Add schema changes as a new Kysely migration in `src/db/migrations` and register it in `migrations/index.ts`; never edit a migration that has shipped.
-- UI state that comes from services is exposed as atoms built on the runtime in `src/ui/runtime.ts`. Writes invalidate `Reactivity` keys so dependent atoms refresh; do not refetch manually.
+- The UI reads services through TanStack Query: `queryOptions` in `src/ui/queries.ts` run Effect programs on the `ManagedRuntime` in `src/ui/runtime.ts`, and writes go through `useMutation` with the `actions` there. Services invalidate Effect `Reactivity` keys; `runtime.ts` maps them to Query keys, so never invalidate queries by hand after a service write.
+- Frontend libraries are TanStack: Router (file routes in `src/routes`, loaders call `ensureQueryData`, search params validated with `Schema.toStandardSchemaV1`), Query, Form, Table, Charts, Hotkeys (physical bindings such as `[KeyQ]` for layout-independent keys), Pacer and Store. Prefer them over hand-written equivalents.
 
 # TypeScript diagnostics
 

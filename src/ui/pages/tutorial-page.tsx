@@ -1,20 +1,20 @@
-import { useAtomValue } from "@effect/atom-react";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { withValue, type Board as BoardState } from "../../domain/game.ts";
 import { explain } from "../../domain/hints.ts";
 import { colorAt } from "../../domain/palette.ts";
 import { givenKnowledge, type Puzzle } from "../../domain/puzzle.ts";
 import { solveLogically, type Layer } from "../../domain/solver.ts";
-import { tutorialAtom } from "../atoms.ts";
+import { tutorialQuery } from "../queries.ts";
 import { Board } from "../components/board.tsx";
 import { Confetti } from "../components/confetti.tsx";
 import { Keypad } from "../components/keypad.tsx";
 import { MiniBoard } from "../components/mini-board.tsx";
 import type { TileMark } from "../components/tile.tsx";
-import { Button, Card, IconButton, Loaded, SectionTitle } from "../components/ui.tsx";
+import { Button, Card, IconButton, SectionTitle } from "../components/ui.tsx";
 import { useSettings } from "../hooks/use-settings.ts";
 import { useSound } from "../hooks/use-sound.ts";
-import { navigate } from "../router.ts";
 
 const intro = [
   {
@@ -49,21 +49,24 @@ const intro = [
   },
 ];
 
-export const TutorialPage = () => (
-  <div className="mx-auto w-full max-w-5xl">
-    <div className="mb-6 flex items-center gap-3">
-      <IconButton icon="back" label="Leave tutorial" onClick={() => navigate({ page: "home" })} />
-      <SectionTitle kicker="Learn by doing">Guided tutorial</SectionTitle>
+export const TutorialPage = () => {
+  const puzzle = useSuspenseQuery(tutorialQuery).data;
+  const navigate = useNavigate();
+  return (
+    <div className="mx-auto w-full max-w-5xl">
+      <div className="mb-6 flex items-center gap-3">
+        <IconButton icon="back" label="Leave tutorial" onClick={() => void navigate({ to: "/" })} />
+        <SectionTitle kicker="Learn by doing">Guided tutorial</SectionTitle>
+      </div>
+      <Tutorial puzzle={puzzle} />
     </div>
-    <Loaded result={useAtomValue(tutorialAtom)} label="Preparing a practice sheet">
-      {(puzzle) => <Tutorial puzzle={puzzle} />}
-    </Loaded>
-  </div>
-);
+  );
+};
 
 const Tutorial = ({ puzzle }: { puzzle: Puzzle }) => {
   const settings = useSettings();
   const play = useSound();
+  const navigate = useNavigate();
   const steps = useMemo(() => solveLogically(givenKnowledge(puzzle), 2).steps, [puzzle]);
   const [slide, setSlide] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
@@ -180,10 +183,10 @@ const Tutorial = ({ puzzle }: { puzzle: Puzzle }) => {
           )}
           {done && (
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button tone="ink" icon="play" onClick={() => navigate({ page: "home" })}>
+              <Button tone="ink" icon="play" onClick={() => void navigate({ to: "/" })}>
                 Play for real
               </Button>
-              <Button icon="book" onClick={() => navigate({ page: "rules" })}>
+              <Button icon="book" onClick={() => void navigate({ to: "/rules" })}>
                 Read the rules
               </Button>
             </div>

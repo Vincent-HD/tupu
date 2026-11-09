@@ -23,7 +23,7 @@ export interface HintState {
 export interface Session {
   readonly puzzle: Puzzle;
   readonly board: Board;
-  readonly selected: number;
+  readonly selected: number | null;
   readonly undoStack: ReadonlyArray<ReadonlyArray<Change>>;
   readonly redoStack: ReadonlyArray<ReadonlyArray<Change>>;
   readonly moves: ReadonlyArray<Move>;
@@ -38,6 +38,7 @@ export interface Session {
 
 export type Action =
   | { readonly type: "select"; readonly cell: number }
+  | { readonly type: "deselect" }
   | { readonly type: "move"; readonly rows: number; readonly columns: number }
   | { readonly type: "place"; readonly layer: Layer; readonly value: number; readonly at: number }
   | { readonly type: "clear"; readonly at: number }
@@ -131,25 +132,35 @@ const editable = (session: Session, cell: number, layer: Layer) =>
   !isGiven(session.puzzle, cell, layer);
 
 export const reduce = (session: Session, action: Action): Session => {
-  if (session.solved && action.type !== "select" && action.type !== "move") return session;
+  if (
+    session.solved &&
+    action.type !== "select" &&
+    action.type !== "deselect" &&
+    action.type !== "move"
+  )
+    return session;
   const { size } = session.puzzle;
   switch (action.type) {
     case "select":
-      return { ...session, selected: action.cell };
+      return { ...session, selected: session.selected === action.cell ? null : action.cell };
+    case "deselect":
+      return session.selected === null ? session : { ...session, selected: null };
     case "move": {
+      if (session.selected === null) return { ...session, selected: 0 };
       const row = (Math.floor(session.selected / size) + action.rows + size) % size;
       const column = ((session.selected % size) + action.columns + size) % size;
       return { ...session, selected: row * size + column };
     }
     case "place": {
       const cell = session.selected;
-      if (!editable(session, cell, action.layer)) return session;
+      if (cell === null || !editable(session, cell, action.layer)) return session;
       const before = valueAt(session.board, cell, action.layer);
       const after = before === action.value ? null : action.value;
       return commit(session, [{ cell, layer: action.layer, before, after }], action.at);
     }
     case "clear": {
       const cell = session.selected;
+      if (cell === null) return session;
       const changes = (["number", "color"] as const)
         .filter((layer) => editable(session, cell, layer))
         .map((layer) => ({

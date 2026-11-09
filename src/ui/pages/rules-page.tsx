@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { levelDescriptions, levelLabels } from "../../domain/difficulty.ts";
 import { Icon } from "../components/icons.tsx";
 import { MiniBoard } from "../components/mini-board.tsx";
-import { Button, Card, IconButton, SectionTitle } from "../components/ui.tsx";
-import { navigate } from "../router.ts";
+import { Card, SectionTitle } from "../components/ui.tsx";
+import { Link } from "@tanstack/react-router";
 
 const Rule = ({
   index,
@@ -32,7 +32,13 @@ const Rule = ({
 export const RulesPage = () => (
   <div className="mx-auto w-full max-w-3xl">
     <div className="mb-6 flex items-center gap-3">
-      <IconButton icon="back" label="Back home" onClick={() => navigate({ page: "home" })} />
+      <Link
+        to="/"
+        aria-label="Back home"
+        className="press inline-flex size-11 shrink-0 items-center justify-center rounded-xl border-[2.5px] border-ink bg-card text-xl shadow-hard"
+      >
+        <Icon name="back" />
+      </Link>
       <SectionTitle kicker="Two layers, three rules">How to play</SectionTitle>
     </div>
     <p className="mb-6 text-lg">
@@ -140,12 +146,18 @@ export const RulesPage = () => (
     </Card>
 
     <div className="flex flex-wrap gap-3">
-      <Button tone="ink" size="lg" icon="sparkle" onClick={() => navigate({ page: "tutorial" })}>
-        Try the guided tutorial
-      </Button>
-      <Button size="lg" icon="play" onClick={() => navigate({ page: "home" })}>
-        Start playing
-      </Button>
+      <Link
+        to="/tutorial"
+        className="press inline-flex h-14 items-center gap-2.5 rounded-2xl border-[2.5px] border-ink bg-ink px-6 text-lg font-bold text-paper shadow-hard"
+      >
+        <Icon name="sparkle" /> Try the guided tutorial
+      </Link>
+      <Link
+        to="/"
+        className="press inline-flex h-14 items-center gap-2.5 rounded-2xl border-[2.5px] border-ink bg-card px-6 text-lg font-bold shadow-hard"
+      >
+        <Icon name="play" /> Start playing
+      </Link>
     </div>
   </div>
 );
@@ -158,7 +170,7 @@ const levelTips: Readonly<Record<1 | 2 | 3 | 4, string>> = {
 };
 
 const tools: ReadonlyArray<
-  readonly ["check" | "bulb" | "grid" | "undo" | "keyboard" | "film", string]
+  readonly ["check" | "bulb" | "grid" | "scan" | "undo" | "keyboard" | "film", string]
 > = [
   [
     "bulb",
@@ -166,7 +178,14 @@ const tools: ReadonlyArray<
   ],
   ["check", "Checks cross out anything that disagrees with the solution. They add 10 seconds."],
   ["grid", "The pair tracker shows which number and color combinations are already placed."],
+  [
+    "scan",
+    "The highlighter (L) turns the keypad into a finder: pick a number, a color or both to light up where they are, dash the tiles that can still take them and flag the rows and columns that miss them.",
+  ],
   ["undo", "Undo and redo as much as you like; mistakes are free."],
-  ["keyboard", "Arrows move, digits set numbers, the Q W E R row sets colors, Backspace erases."],
+  [
+    "keyboard",
+    "Arrows move, the digit row sets numbers (no Shift needed on AZERTY), the top letter row sets colors (Q W E R… or A Z E R… depending on your keyboard), Backspace erases, L opens the highlighter.",
+  ],
   ["film", "Every solve is recorded so you can watch the replay afterwards."],
 ];

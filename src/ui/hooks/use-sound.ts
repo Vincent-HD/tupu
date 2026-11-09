@@ -1,9 +1,8 @@
-import { useAtomSet } from "@effect/atom-react";
 import { useCallback } from "react";
 import type { Cue } from "../../services/sound.ts";
-import { playAtom } from "../atoms.ts";
+import { actions } from "../queries.ts";
 
-export const useSound = () => {
-  const play = useAtomSet(playAtom);
-  return useCallback((cue: Cue, value?: number) => play({ cue, value }), [play]);
-};
+export const useSound = () =>
+  useCallback((cue: Cue, value?: number) => {
+    actions.play({ cue, value });
+  }, []);

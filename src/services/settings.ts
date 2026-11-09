@@ -2,6 +2,9 @@ import { Context, Effect, Layer, Option, Schema } from "effect";
 import { Reactivity } from "effect/reactivity";
 import { Database } from "../db/database.ts";
 
+export const keyboardLayouts = ["auto", "qwerty", "azerty", "qwertz"] as const;
+export type KeyboardLayout = (typeof keyboardLayouts)[number];
+
 const flag = (value: boolean) =>
   Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(value)));
 
@@ -17,6 +20,9 @@ export const Settings = Schema.Struct({
   showConflicts: flag(true),
   pairMatrix: flag(true),
   keepAwake: flag(false),
+  keyboardLayout: Schema.Literals(keyboardLayouts).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed("auto")),
+  ),
   playerId: Schema.NullOr(Schema.String).pipe(Schema.withDecodingDefaultKey(Effect.succeed(null))),
 });
 export type Settings = typeof Settings.Type;

@@ -1,6 +1,6 @@
-import { Cause } from "effect";
-import { AsyncResult } from "effect/reactivity";
-import { useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { HotkeysProvider, useHotkey } from "@tanstack/react-hotkeys";
+import { Link, type ErrorComponentProps } from "@tanstack/react-router";
+import { useId, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { Icon, type IconName } from "./icons.tsx";
 
 export const toneClasses = {
@@ -161,6 +161,11 @@ export const Segmented = <A extends string | number>({
   </div>
 );
 
+const ModalEscape = ({ onClose }: { onClose: () => void }) => {
+  useHotkey("Escape", onClose);
+  return null;
+};
+
 export const Modal = ({
   open,
   onClose,
@@ -172,31 +177,27 @@ export const Modal = ({
   children: ReactNode;
   label: string;
 }) => {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  const scope = `dialog-${useId()}`;
   if (!open) return null;
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={label}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-[2px] sm:items-center"
-      onClick={onClose}
-    >
+    <HotkeysProvider scope={scope} exclusive>
+      <ModalEscape onClose={onClose} />
       <div
-        className="max-h-[92dvh] w-full max-w-md animate-float-in overflow-y-auto pb-[env(safe-area-inset-bottom)]"
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+        className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-[2px] sm:items-center"
+        onClick={onClose}
       >
-        {children}
+        <div
+          className="max-h-[92dvh] w-full max-w-md animate-float-in overflow-y-auto pb-[env(safe-area-inset-bottom)]"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {children}
+        </div>
       </div>
-    </div>
+    </HotkeysProvider>
   );
 };
 
@@ -210,27 +211,32 @@ export const Spinner = ({ label = "Loading" }: { label?: string | undefined }) =
   </div>
 );
 
-export const Loaded = <A, E>({
-  result,
-  children,
-  label,
-}: {
-  result: AsyncResult.AsyncResult<A, E>;
-  children: (value: A) => ReactNode;
-  label?: string;
-}) =>
-  AsyncResult.match(result, {
-    onInitial: () => <Spinner label={label} />,
-    onFailure: (failure) => (
-      <Card tone="rose" className="p-5">
-        <p className="font-display text-xl font-extrabold">Something tore.</p>
-        <pre className="mt-2 overflow-auto text-xs whitespace-pre-wrap">
-          {Cause.pretty(failure.cause)}
-        </pre>
-      </Card>
-    ),
-    onSuccess: (success) => children(success.value),
-  });
+export const RouteError = ({ error, reset }: ErrorComponentProps) => (
+  <Card tone="rose" className="mx-auto max-w-2xl p-5">
+    <p className="font-display text-xl font-extrabold">Something tore.</p>
+    <pre className="mt-2 overflow-auto text-xs whitespace-pre-wrap">
+      {error instanceof Error ? error.message : String(error)}
+    </pre>
+    <div className="mt-4 flex gap-2">
+      <Button size="sm" onClick={reset}>
+        Try again
+      </Button>
+      <Link to="/" className="font-bold underline">
+        Back home
+      </Link>
+    </div>
+  </Card>
+);
+
+export const NotFoundPage = () => (
+  <Card className="ruled mx-auto max-w-xl p-8 text-center">
+    <p className="font-display text-5xl font-extrabold">404</p>
+    <p className="mt-2 text-lg">This sheet is not in the notebook.</p>
+    <Link to="/" className="mt-5 inline-block font-bold underline">
+      Back home
+    </Link>
+  </Card>
+);
 
 export const SectionTitle = ({ children, kicker }: { children: ReactNode; kicker?: string }) => (
   <div className="mb-4">

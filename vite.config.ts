@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { stripTypeScriptTypes } from "node:module";
 import { join, relative } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
+import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
@@ -35,7 +36,16 @@ const serviceWorker = (): Plugin => ({
 });
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), serviceWorker()],
+  plugins: [
+    tanstackRouter({
+      target: "react",
+      autoCodeSplitting: true,
+      generatedRouteTree: "./src/routeTree.gen.ts",
+    }),
+    react(),
+    tailwindcss(),
+    serviceWorker(),
+  ],
   optimizeDeps: { exclude: ["@effect/wa-sqlite"] },
   worker: { format: "es" },
   build: { chunkSizeWarningLimit: 900 },

@@ -1,6 +1,5 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/reactivity";
-import { useState } from "react";
+import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { formatLongDate } from "../../domain/calendar.ts";
 import {
   asDifficulty,
@@ -12,15 +11,8 @@ import {
   type Difficulty,
 } from "../../domain/difficulty.ts";
 import { formatDuration } from "../../domain/score.ts";
-import type { GameSummary } from "../../services/games.ts";
-import {
-  dailiesAtom,
-  inProgressAtom,
-  removeGameAtom,
-  startGameAtom,
-  statsAtom,
-  todayAtom,
-} from "../atoms.ts";
+import type { GameSummary, StartGame } from "../../services/games.ts";
+import { actions, dailiesQuery, inProgressQuery, statsQuery, todayQuery } from "../queries.ts";
 import { Icon, type IconName } from "../components/icons.tsx";
 import {
   Button,
@@ -32,7 +24,6 @@ import {
   type Tone,
 } from "../components/ui.tsx";
 import { useSound } from "../hooks/use-sound.ts";
-import { href, navigate, type Route } from "../router.ts";
 
 const difficultyTone: Readonly<Record<Difficulty, Tone>> = {
   easy: "mint",
@@ -51,20 +42,17 @@ const difficultyBlurb: Readonly<Record<Difficulty, string>> = {
 };
 
 export const HomePage = () => {
-  const today = useAtomValue(todayAtom);
-  const start = useAtomSet(startGameAtom, { mode: "promise" });
+  const today = useSuspenseQuery(todayQuery).data;
   const play = useSound();
-  const [starting, setStarting] = useState<string | null>(null);
-
-  const launch = async (key: string, input: Parameters<typeof start>[0]) => {
-    play("page");
-    setStarting(key);
-    try {
-      navigate({ page: "play", id: await start(input) });
-    } finally {
-      setStarting(null);
-    }
-  };
+  const navigate = useNavigate();
+  const start = useMutation({
+    mutationFn: (input: { readonly key: string; readonly game: StartGame }) =>
+      actions.startGame(input.game),
+    onMutate: () => play("page"),
+    onSuccess: (gameId) => navigate({ to: "/play/$gameId", params: { gameId } }),
+  });
+  const starting = start.isPending ? start.variables.key : null;
+  const launch = (key: string, game: StartGame) => start.mutate({ key, game });
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-10">
@@ -89,18 +77,12 @@ export const HomePage = () => {
             device.
           </p>
         </div>
-        {AsyncResult.match(today, {
-          onInitial: () => <Card className="min-h-56 p-6">{null}</Card>,
-          onFailure: () => <Card className="p-6">Could not read today's date.</Card>,
-          onSuccess: ({ value }) => (
-            <DailyCard
-              date={value.date}
-              difficulty={value.difficulty}
-              busy={starting === "daily"}
-              onPlay={() => void launch("daily", { mode: "daily", date: value.date })}
-            />
-          ),
-        })}
+        <DailyCard
+          date={today.date}
+          difficulty={today.difficulty}
+          busy={starting === "daily"}
+          onPlay={() => launch("daily", { mode: "daily", date: today.date })}
+        />
       </section>
 
       <ContinueSection />
@@ -113,7 +95,7 @@ export const HomePage = () => {
               key={difficulty}
               type="button"
               disabled={starting !== null}
-              onClick={() => void launch(difficulty, { mode: "quick", difficulty })}
+              onClick={() => launch(difficulty, { mode: "quick", difficulty })}
               className={`press group relative flex cursor-pointer flex-col items-start rounded-2xl border-[2.5px] border-ink p-4 text-left shadow-hard ${toneClasses[difficultyTone[difficulty]]} ${index % 2 ? "rotate-[0.5deg]" : "-rotate-[0.5deg]"}`}
             >
               <span className="flex w-full items-center justify-between">
@@ -140,42 +122,42 @@ export const HomePage = () => {
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <NavCard
-          route={{ page: "custom" }}
+          to="/custom"
           icon="sliders"
           tone="marker"
           title="Custom puzzle"
           text="Pick the size, the logic and the clue density. Share a seed with friends."
         />
         <NavCard
-          route={{ page: "archive" }}
+          to="/archive"
           icon="calendar"
           tone="sky"
           title="Daily archive"
           text="Every past daily, unlocked. Fill in the gaps of your calendar."
         />
         <NavCard
-          route={{ page: "tutorial" }}
+          to="/tutorial"
           icon="sparkle"
           tone="mint"
           title="Guided tutorial"
           text="Solve a small board step by step with explanations."
         />
         <NavCard
-          route={{ page: "stats" }}
+          to="/stats"
           icon="chart"
           tone="lilac"
           title="Your stats"
           text="Streaks, best times and how you solve."
         />
         <NavCard
-          route={{ page: "leaderboard" }}
+          to="/leaderboard"
           icon="trophy"
           tone="tangerine"
           title="Leaderboard"
           text="Local players race on the same boards."
         />
         <NavCard
-          route={{ page: "rules" }}
+          to="/rules"
           icon="book"
           tone="rose"
           title="How to play"
@@ -199,8 +181,7 @@ const DailyCard = ({
   busy: boolean;
   onPlay: () => void;
 }) => {
-  const games = useAtomValue(dailiesAtom(`${date}|${date}`));
-  const entries = AsyncResult.getOrElse(games, () => []);
+  const entries = useQuery(dailiesQuery({ from: date, to: date })).data ?? [];
   const solved = entries.filter((game) => game.status === "solved");
   const best = solved.reduce<GameSummary | undefined>(
     (current, game) =>
@@ -237,8 +218,8 @@ const DailyCard = ({
 };
 
 const ContinueSection = () => {
-  const games = AsyncResult.getOrElse(useAtomValue(inProgressAtom), () => []);
-  const remove = useAtomSet(removeGameAtom);
+  const games = useSuspenseQuery(inProgressQuery).data;
+  const remove = useMutation({ mutationFn: actions.removeGame });
   if (games.length === 0) return null;
   return (
     <section>
@@ -263,17 +244,16 @@ const ContinueSection = () => {
                 icon="trash"
                 label="Discard"
                 className="size-9 text-base"
-                onClick={() => remove(game.id)}
+                onClick={() => remove.mutate(game.id)}
               />
             </div>
-            <Button
-              size="sm"
-              tone="marker"
-              icon="play"
-              onClick={() => navigate({ page: "play", id: game.id })}
+            <Link
+              to="/play/$gameId"
+              params={{ gameId: game.id }}
+              className="press inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border-[2.5px] border-ink bg-marker px-3 text-sm font-bold shadow-hard"
             >
-              Continue
-            </Button>
+              <Icon name="play" /> Continue
+            </Link>
           </Card>
         ))}
       </div>
@@ -281,21 +261,23 @@ const ContinueSection = () => {
   );
 };
 
+type NavPath = "/custom" | "/archive" | "/tutorial" | "/stats" | "/leaderboard" | "/rules";
+
 const NavCard = ({
-  route,
+  to,
   icon,
   tone,
   title,
   text,
 }: {
-  route: Route;
+  to: NavPath;
   icon: IconName;
   tone: Tone;
   title: string;
   text: string;
 }) => (
-  <a
-    href={href(route)}
+  <Link
+    to={to}
     className="press flex items-start gap-4 rounded-2xl border-[2.5px] border-ink bg-card p-4 shadow-hard"
   >
     <span
@@ -307,15 +289,15 @@ const NavCard = ({
       <span className="block font-display text-xl font-extrabold">{title}</span>
       <span className="block text-sm text-ink-soft">{text}</span>
     </span>
-  </a>
+  </Link>
 );
 
 const StatsStrip = () => {
-  const stats = AsyncResult.getOrElse(useAtomValue(statsAtom), () => undefined);
+  const stats = useQuery(statsQuery).data;
   if (!stats || stats.solved === 0) return null;
   return (
-    <a
-      href={href({ page: "stats" })}
+    <Link
+      to="/stats"
       className="press grid grid-cols-2 gap-3 rounded-2xl border-[2.5px] border-ink bg-ink p-4 text-paper shadow-hard sm:grid-cols-4"
     >
       {[
@@ -329,7 +311,7 @@ const StatsStrip = () => {
           <p className="font-display text-3xl font-extrabold tabular-nums">{value}</p>
         </div>
       ))}
-    </a>
+    </Link>
   );
 };
 

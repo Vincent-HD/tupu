@@ -4,6 +4,7 @@
     "**/dist-server/**",
     "**/coverage/**",
     "**/.cache/**",
-    "pnpm-lock.yaml"
+    "pnpm-lock.yaml",
+    "src/routeTree.gen.ts"
   ]
 }

@@ -25,7 +25,7 @@ A local-first logic puzzle of numbers and colors. Each tile takes a number and a
 
 ## Stack
 
-Vite, React and Tailwind CSS for the UI; Effect 4 for services, layers, schemas and atoms; Kysely as the query builder and migrator, executed through the Effect `SqlClient`. Lint and format with Oxlint and Oxfmt; Effect diagnostics come from `@effect/tsgo` on TypeScript 7.
+Vite, React and Tailwind CSS for the UI, with TanStack Router, Query, Form, Table, Charts, Hotkeys, Pacer and Store; Effect 4 for services, layers and schemas; Kysely as the query builder and migrator, executed through the Effect `SqlClient`. Lint and format with Oxlint and Oxfmt; Effect diagnostics come from `@effect/tsgo` on TypeScript 7.
 
 | Path           | Role                                                                   |
 | -------------- | ---------------------------------------------------------------------- |

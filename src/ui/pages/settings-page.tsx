@@ -1,25 +1,22 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/reactivity";
-import { useRef, useState } from "react";
+import { useForm } from "@tanstack/react-form";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
+import { Schema } from "effect";
+import { useRef } from "react";
 import type { Settings } from "../../services/settings.ts";
-import {
-  currentPlayerAtom,
-  exportBackupAtom,
-  renamePlayerAtom,
-  restoreBackupAtom,
-  updateSettingsAtom,
-} from "../atoms.ts";
+import { actions, currentPlayerQuery } from "../queries.ts";
 import { Button, Card, IconButton, Segmented, SectionTitle, Toggle } from "../components/ui.tsx";
 import { useSettings } from "../hooks/use-settings.ts";
 import { useSound } from "../hooks/use-sound.ts";
-import { navigate } from "../router.ts";
 import { PlayersBar } from "./leaderboard-page.tsx";
 import { promptInstall, usePwa } from "../../pwa/pwa.ts";
 import { detach } from "../detach.ts";
 
 export const SettingsPage = () => {
   const settings = useSettings();
-  const update = useAtomSet(updateSettingsAtom);
+  const navigate = useNavigate();
+  const updateSettings = useMutation({ mutationFn: actions.updateSettings });
+  const update = updateSettings.mutate;
   const play = useSound();
   const set = (patch: Partial<Settings>) => {
     update(patch);
@@ -28,7 +25,7 @@ export const SettingsPage = () => {
   return (
     <div className="mx-auto w-full max-w-3xl">
       <div className="mb-6 flex items-center gap-3">
-        <IconButton icon="back" label="Back home" onClick={() => navigate({ page: "home" })} />
+        <IconButton icon="back" label="Back home" onClick={() => void navigate({ to: "/" })} />
         <SectionTitle kicker="Make it yours">Settings</SectionTitle>
       </div>
       <div className="flex flex-col gap-6">
@@ -106,6 +103,24 @@ export const SettingsPage = () => {
               checked={settings.keepAwake}
               onChange={(keepAwake) => set({ keepAwake })}
             />
+            <div className="py-3">
+              <p className="font-bold">Keyboard layout</p>
+              <p className="mb-2 text-sm text-ink-soft">
+                Colors use the top letter row and numbers the digit row, by physical position. This
+                only changes the key labels shown on the keypad.
+              </p>
+              <Segmented
+                label="Keyboard layout"
+                value={settings.keyboardLayout}
+                onChange={(keyboardLayout) => set({ keyboardLayout })}
+                options={[
+                  { value: "auto", label: "Auto" },
+                  { value: "qwerty", label: "QWERTY" },
+                  { value: "azerty", label: "AZERTY" },
+                  { value: "qwertz", label: "QWERTZ" },
+                ]}
+              />
+            </div>
           </div>
         </Card>
         <Card className="p-5">
@@ -121,45 +136,84 @@ export const SettingsPage = () => {
   );
 };
 
+const PlayerName = Schema.String.pipe(
+  Schema.check(Schema.isMinLength(1, { message: "Give the player a name." })),
+  Schema.check(Schema.isMaxLength(24, { message: "24 characters at most." })),
+);
+
 const RenamePlayer = () => {
-  const current = AsyncResult.getOrElse(useAtomValue(currentPlayerAtom), () => undefined);
-  const rename = useAtomSet(renamePlayerAtom, { mode: "promiseExit" });
-  const [name, setName] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
+  const current = useQuery(currentPlayerQuery).data;
+  const rename = useMutation({ mutationFn: actions.renamePlayer });
+  const form = useForm({
+    defaultValues: { name: "" },
+    validators: { onChange: Schema.toStandardSchemaV1(Schema.Struct({ name: PlayerName })) },
+    onSubmit: async ({ value, formApi }) => {
+      if (!current) return;
+      await rename.mutateAsync({ id: current.id, name: value.name.trim() });
+      formApi.reset();
+    },
+  });
   if (!current) return null;
   return (
     <form
       className="mt-4 flex flex-wrap items-center gap-2"
-      onSubmit={detach(async (event) => {
+      onSubmit={(event) => {
         event.preventDefault();
-        const exit = await rename({ id: current.id, name });
-        setMessage(exit._tag === "Success" ? "Renamed." : "That name is taken.");
-        if (exit._tag === "Success") setName("");
-      })}
+        void form.handleSubmit();
+      }}
     >
-      <input
-        value={name}
-        maxLength={24}
-        onChange={(event) => setName(event.target.value)}
-        placeholder={`Rename ${current.name}`}
-        aria-label="New name"
-        className="h-11 min-w-0 flex-1 rounded-xl border-[2.5px] border-ink bg-card px-3 font-bold shadow-hard-sm outline-none"
-      />
-      <Button type="submit" disabled={!name.trim()}>
-        Rename
-      </Button>
-      {message && <p className="w-full text-sm font-bold">{message}</p>}
+      <form.Field name="name">
+        {(field) => (
+          <input
+            value={field.state.value}
+            maxLength={24}
+            onBlur={field.handleBlur}
+            onChange={(event) => field.handleChange(event.target.value)}
+            placeholder={`Rename ${current.name}`}
+            aria-label="New name"
+            className="h-11 min-w-0 flex-1 rounded-xl border-[2.5px] border-ink bg-card px-3 font-bold shadow-hard-sm outline-none"
+          />
+        )}
+      </form.Field>
+      <form.Subscribe
+        selector={(state) =>
+          state.canSubmit && !state.isSubmitting && state.values.name.trim() !== ""
+        }
+      >
+        {(canSubmit) => (
+          <Button type="submit" disabled={!canSubmit}>
+            Rename
+          </Button>
+        )}
+      </form.Subscribe>
+      {rename.isSuccess && <p className="w-full text-sm font-bold">Renamed.</p>}
+      {rename.isError && (
+        <p className="w-full text-sm font-bold text-danger">That name is taken.</p>
+      )}
     </form>
   );
 };
 
 const backupFileName = () => `tupu-${new Date().toISOString().slice(0, 10)}.sqlite`;
 
+const downloadBackup = (bytes: Uint8Array) => {
+  const url = URL.createObjectURL(
+    new Blob([new Uint8Array(bytes)], { type: "application/vnd.sqlite3" }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = backupFileName();
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
 const DataCard = () => {
-  const exportBackup = useAtomSet(exportBackupAtom, { mode: "promise" });
-  const restore = useAtomSet(restoreBackupAtom, { mode: "promiseExit" });
+  const exportBackup = useMutation({ mutationFn: actions.exportBackup, onSuccess: downloadBackup });
+  const restore = useMutation({
+    mutationFn: async (file: File) =>
+      actions.restoreBackup(new Uint8Array(await file.arrayBuffer())),
+  });
   const input = useRef<HTMLInputElement>(null);
-  const [message, setMessage] = useState<string | null>(null);
   return (
     <Card tone="paper" className="ruled p-5">
       <p className="font-display text-xl font-extrabold">Your data</p>
@@ -170,22 +224,12 @@ const DataCard = () => {
       <div className="mt-4 flex flex-wrap gap-2">
         <Button
           icon="download"
-          onClick={detach(async () => {
-            const bytes = await exportBackup(undefined);
-            const url = URL.createObjectURL(
-              new Blob([new Uint8Array(bytes)], { type: "application/vnd.sqlite3" }),
-            );
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = backupFileName();
-            link.click();
-            URL.revokeObjectURL(url);
-            setMessage("Backup downloaded.");
-          })}
+          disabled={exportBackup.isPending}
+          onClick={() => exportBackup.mutate()}
         >
           Download backup
         </Button>
-        <Button icon="upload" onClick={() => input.current?.click()}>
+        <Button icon="upload" disabled={restore.isPending} onClick={() => input.current?.click()}>
           Restore backup
         </Button>
         <input
@@ -193,18 +237,18 @@ const DataCard = () => {
           type="file"
           accept=".sqlite,.db,application/vnd.sqlite3"
           className="hidden"
-          onChange={detach(async (event) => {
+          onChange={(event) => {
             const file = event.target.files?.[0];
-            if (!file) return;
-            const exit = await restore(new Uint8Array(await file.arrayBuffer()));
-            setMessage(
-              exit._tag === "Success" ? "Backup restored." : "That file is not a Tupu backup.",
-            );
             event.target.value = "";
-          })}
+            if (file) restore.mutate(file);
+          }}
         />
       </div>
-      {message && <p className="mt-3 font-bold">{message}</p>}
+      {exportBackup.isSuccess && <p className="mt-3 font-bold">Backup downloaded.</p>}
+      {restore.isSuccess && <p className="mt-3 font-bold">Backup restored.</p>}
+      {restore.isError && (
+        <p className="mt-3 font-bold text-danger">That file is not a Tupu backup.</p>
+      )}
     </Card>
   );
 };
