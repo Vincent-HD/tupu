@@ -10,5 +10,11 @@
     "react/rules-of-hooks": "error",
     "react/exhaustive-deps": "warn"
   },
-  "ignorePatterns": ["**/dist/**", "**/coverage/**", "**/.cache/**", "**/generated/**"]
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/dist-server/**",
+    "**/coverage/**",
+    "**/.cache/**",
+    "**/generated/**"
+  ]
 }

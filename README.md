@@ -68,17 +68,17 @@ In CI, set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` instead of using a
 
 ### Docker
 
-The image builds the app with Node and serves it with Caddy. Caddy issues HTTPS certificates automatically when `SITE_ADDRESS` is a public domain, and stores them in the `/data` volume.
+The image builds the app, then runs a small Effect HTTP server on Node ([`server/main.ts`](server/main.ts), bundled into one file by `pnpm build:server`). It serves `dist/` with SPA fallback, ETags, the right MIME types for WebAssembly and the manifest, and per-path cache headers. It listens on plain HTTP port 8080 as the unprivileged `node` user; put your own reverse proxy in front for HTTPS, which the PWA and OPFS storage require on phones. Nothing is stored server-side, so no volume is needed. `GET /healthz` answers `ok`.
 
 ```sh
-docker compose up -d --build                                   # http://localhost:8080
-SITE_ADDRESS=tupu.example.com HTTP_PORT=80 HTTPS_PORT=443 docker compose up -d --build
+docker compose up -d --build        # http://localhost:8080
+PORT=3000 docker compose up -d --build
 ```
 
-| Variable       | Default | Purpose                                                                  |
-| -------------- | ------- | ------------------------------------------------------------------------ |
-| `SITE_ADDRESS` | `:80`   | Caddy site address. A domain enables automatic HTTPS (needed on phones). |
-| `HTTP_PORT`    | `8080`  | Host port for HTTP.                                                      |
-| `HTTPS_PORT`   | `8443`  | Host port for HTTPS and HTTP/3.                                          |
+| Variable      | Default     | Purpose                        |
+| ------------- | ----------- | ------------------------------ |
+| `PORT`        | `8080`      | Port the server listens on.    |
+| `HOST`        | `0.0.0.0`   | Interface the server binds to. |
+| `STATIC_ROOT` | `/app/dist` | Directory with the built app.  |
 
-Volumes: `caddy-data` (certificates) and `caddy-config` (Caddy's autosaved config).
+Without Docker: `pnpm build && pnpm build:server && pnpm start`, or `pnpm serve` to run the server from source.

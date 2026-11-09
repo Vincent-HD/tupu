@@ -172,6 +172,9 @@ importers:
       '@effect/platform-browser':
         specifier: 4.1.2
         version: 4.1.2(effect@4.1.2)
+      '@effect/platform-node':
+        specifier: 4.1.2
+        version: 4.1.2(effect@4.1.2)(redis@6.3.1)
       '@effect/sql-sqlite-wasm':
         specifier: 4.1.2
         version: 4.1.2(@effect/wa-sqlite@0.1.2)(effect@4.1.2)
@@ -203,9 +206,6 @@ importers:
       '@alchemy.run/cloudflare':
         specifier: 2.0.0-beta.85
         version: 2.0.0-beta.85(@effect/platform-node@4.1.2(effect@4.1.2)(redis@6.3.1))(@types/node@26.6.6)(alchemy@2.0.0-beta.85(@effect/platform-node@4.1.2(effect@4.1.2)(redis@6.3.1))(@types/react@19.3.0)(effect@4.1.2)(vite@8.3.6(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))(ws@8.22.1))(effect@4.1.2)(typescript@7.0.2)(vite@8.3.6(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))
-      '@effect/platform-node':
-        specifier: 4.1.2
-        version: 4.1.2(effect@4.1.2)(redis@6.3.1)
       '@effect/sql-sqlite-node':
         specifier: 4.1.2
         version: 4.1.2(effect@4.1.2)

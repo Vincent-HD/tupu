@@ -5,5 +5,12 @@
     "lib": ["ES2024"],
     "types": ["node"]
   },
-  "include": ["vite.config.ts", "alchemy.run.ts", "scripts", "test"]
+  "include": [
+    "vite.config.ts",
+    "vite.server.config.ts",
+    "alchemy.run.ts",
+    "server",
+    "scripts",
+    "test"
+  ]
 }

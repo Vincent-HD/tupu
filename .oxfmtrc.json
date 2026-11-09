@@ -1,3 +1,9 @@
 {
-  "ignorePatterns": ["**/dist/**", "**/coverage/**", "**/.cache/**", "pnpm-lock.yaml"]
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/dist-server/**",
+    "**/coverage/**",
+    "**/.cache/**",
+    "pnpm-lock.yaml"
+  ]
 }
