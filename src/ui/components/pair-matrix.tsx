@@ -37,7 +37,7 @@ export const PairMatrix = ({
         {Array.from({ length: size }, (_, color) => (
           <span
             key={color}
-            className="mx-auto mb-0.5 h-2.5 w-full max-w-7 rounded-sm border-2 border-ink"
+            className="mx-auto mb-0.5 h-2.5 w-full max-w-8 rounded-sm border-2 border-ink"
             style={{ backgroundColor: colorAt(color).fill }}
           />
         ))}
@@ -56,7 +56,7 @@ export const PairMatrix = ({
                   aria-label={`${colorAt(color).name} ${number + 1}: ${count === 0 ? "not placed" : count > 1 ? "placed twice" : "placed"}`}
                   onClick={() => onFocus(active ? null : { number, color })}
                   onMouseEnter={() => onFocus({ number, color })}
-                  className={`flex aspect-square max-h-7 cursor-pointer items-center justify-center rounded-md border-2 text-xs font-extrabold transition-transform ${active ? "scale-110 border-ink" : "border-ink/30"} ${count > 1 ? "bg-danger text-white" : ""}`}
+                  className={`mx-auto flex aspect-square w-full max-w-8 cursor-pointer items-center justify-center rounded-md border-2 text-xs font-extrabold transition-transform ${active ? "scale-110 border-ink" : "border-ink/30"} ${count > 1 ? "bg-danger text-white" : ""}`}
                   style={
                     count === 1
                       ? { backgroundColor: colorAt(color).fill, borderColor: "var(--ink)" }
