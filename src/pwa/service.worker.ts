@@ -44,13 +44,15 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate") {
     event.respondWith(
       caches
-        .match(shell)
-        .then((cached) => cached ?? caches.match("/"))
+        .match(shell, { ignoreVary: true })
+        .then((cached) => cached ?? caches.match("/", { ignoreVary: true }))
         .then((cached) => cached ?? fetch(request)),
     );
     return;
   }
-  event.respondWith(caches.match(request).then((cached) => cached ?? fromNetwork(request)));
+  event.respondWith(
+    caches.match(request, { ignoreVary: true }).then((cached) => cached ?? fromNetwork(request)),
+  );
 });
 
 export {};
