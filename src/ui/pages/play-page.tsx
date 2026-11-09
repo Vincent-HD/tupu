@@ -36,7 +36,7 @@ import type { TileMark } from "../components/tile.tsx";
 import { Button, Card, Chip, IconButton, Modal } from "../components/ui.tsx";
 import { useSettings } from "../hooks/use-settings.ts";
 import { useSound } from "../hooks/use-sound.ts";
-import { usePageVisible, useStopwatch } from "../hooks/use-stopwatch.ts";
+import { usePageVisible, useStopwatch, useTicker } from "../hooks/use-stopwatch.ts";
 import { useWakeLock } from "../hooks/use-wake-lock.ts";
 import { colorKeyCodes, digitKeyCodes, numpadKeyCodes, useColorKeyLabels } from "../keyboard.ts";
 import { detach } from "../detach.ts";
@@ -817,11 +817,14 @@ const Timer = ({
   read: () => number;
   running: boolean;
   frozenMs: number | null;
-}) => (
-  <div
-    className={`rounded-xl border-[2.5px] border-ink px-3 py-1.5 font-display text-2xl font-extrabold tabular-nums shadow-hard-sm ${running ? "bg-card" : "bg-paper-deep"}`}
-    aria-label="Time elapsed"
-  >
-    {formatDuration(frozenMs ?? read())}
-  </div>
-);
+}) => {
+  useTicker({ running, everyMs: 250 });
+  return (
+    <div
+      className={`rounded-xl border-[2.5px] border-ink px-3 py-1.5 font-display text-2xl font-extrabold tabular-nums shadow-hard-sm ${running ? "bg-card" : "bg-paper-deep"}`}
+      aria-label="Time elapsed"
+    >
+      {formatDuration(frozenMs ?? read())}
+    </div>
+  );
+};

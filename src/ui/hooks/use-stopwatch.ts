@@ -3,14 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export const useStopwatch = (input: { readonly initialMs: number; readonly running: boolean }) => {
   const base = useRef(input.initialMs);
   const startedAt = useRef<number | null>(null);
-  const [, setTick] = useState(0);
 
   useEffect(() => {
     if (!input.running) return;
     startedAt.current = performance.now();
-    const interval = window.setInterval(() => setTick((tick) => tick + 1), 250);
     return () => {
-      window.clearInterval(interval);
       if (startedAt.current !== null) base.current += performance.now() - startedAt.current;
       startedAt.current = null;
     };
@@ -21,6 +18,15 @@ export const useStopwatch = (input: { readonly initialMs: number; readonly runni
     [],
   );
   return read;
+};
+
+export const useTicker = (input: { readonly running: boolean; readonly everyMs: number }) => {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!input.running) return;
+    const interval = window.setInterval(() => setTick((tick) => tick + 1), input.everyMs);
+    return () => window.clearInterval(interval);
+  }, [input.running, input.everyMs]);
 };
 
 export const usePageVisible = () => {
