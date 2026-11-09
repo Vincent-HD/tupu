@@ -124,6 +124,7 @@ export class Games extends Context.Service<
     readonly get: (id: string) => Effect.Effect<GameRecord, GameNotFound>;
     readonly save: (snapshot: GameSnapshot) => Effect.Effect<void>;
     readonly complete: (snapshot: GameSnapshot) => Effect.Effect<CompletionResult, GameNotFound>;
+    readonly standing: (id: string) => Effect.Effect<Option.Option<CompletionResult>, GameNotFound>;
     readonly remove: (id: string) => Effect.Effect<void>;
     readonly inProgress: Effect.Effect<ReadonlyArray<GameSummary>>;
     readonly solved: Effect.Effect<ReadonlyArray<GameSummary>>;
@@ -235,6 +236,45 @@ export class Games extends Context.Service<
         yield* reactivity.invalidate([gamesReactivityKey]);
       });
 
+      const rank = Effect.fnUntraced(function* (game: GameRecord, scoreMs: number) {
+        const board = yield* database
+          .rows(
+            database.query
+              .selectFrom("games")
+              .select(["id", "player_id", "score_ms"])
+              .where("status", "=", "solved")
+              .$if(game.mode === "custom", (query) =>
+                query
+                  .where("mode", "=", "custom")
+                  .where("size", "=", game.puzzle.size)
+                  .where("level", "=", game.puzzle.level),
+              )
+              .$if(game.mode !== "custom", (query) =>
+                query.where("mode", "!=", "custom").where("difficulty", "=", game.difficulty ?? ""),
+              ),
+          )
+          .pipe(Effect.orDie);
+        const better = board.filter((entry) => (entry.score_ms ?? Infinity) < scoreMs).length;
+        const personalBest = !board.some(
+          (entry) =>
+            entry.id !== game.id &&
+            entry.player_id === game.playerId &&
+            (entry.score_ms ?? Infinity) <= scoreMs,
+        );
+        return {
+          scoreMs,
+          rank: better + 1,
+          entries: board.length,
+          personalBest,
+        } satisfies CompletionResult;
+      });
+
+      const standing = Effect.fn("Games.standing")(function* (id: string) {
+        const game = yield* get(id);
+        if (game.status !== "solved" || game.scoreMs === null) return Option.none();
+        return Option.some(yield* rank(game, game.scoreMs));
+      });
+
       const complete = Effect.fn("Games.complete")(function* (snapshot: GameSnapshot) {
         const game = yield* get(snapshot.id);
         const scoreMs = scoreOf(snapshot);
@@ -254,38 +294,9 @@ export class Games extends Context.Service<
             )
             .pipe(Effect.orDie);
         }
-        const board = yield* database
-          .rows(
-            database.query
-              .selectFrom("games")
-              .select(["id", "player_id", "score_ms"])
-              .where("status", "=", "solved")
-              .$if(game.mode === "custom", (query) =>
-                query
-                  .where("mode", "=", "custom")
-                  .where("size", "=", game.puzzle.size)
-                  .where("level", "=", game.puzzle.level),
-              )
-              .$if(game.mode !== "custom", (query) =>
-                query.where("mode", "!=", "custom").where("difficulty", "=", game.difficulty ?? ""),
-              ),
-          )
-          .pipe(Effect.orDie);
-        const finalScore = game.scoreMs ?? scoreMs;
-        const better = board.filter((entry) => (entry.score_ms ?? Infinity) < finalScore).length;
-        const personalBest = !board.some(
-          (entry) =>
-            entry.id !== game.id &&
-            entry.player_id === game.playerId &&
-            (entry.score_ms ?? Infinity) <= finalScore,
-        );
+        const result = yield* rank(game, game.scoreMs ?? scoreMs);
         yield* reactivity.invalidate([gamesReactivityKey, "stats", "leaderboard"]);
-        return {
-          scoreMs: finalScore,
-          rank: better + 1,
-          entries: board.length,
-          personalBest,
-        } satisfies CompletionResult;
+        return result;
       });
 
       const remove = Effect.fn("Games.remove")(function* (id: string) {
@@ -333,6 +344,7 @@ export class Games extends Context.Service<
         get,
         save,
         complete,
+        standing,
         remove,
         inProgress: byStatus("playing").pipe(Effect.withSpan("Games.inProgress")),
         solved: byStatus("solved").pipe(Effect.withSpan("Games.solved")),

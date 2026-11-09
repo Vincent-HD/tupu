@@ -1,6 +1,6 @@
 import { SqliteClient } from "@effect/sql-sqlite-node";
 import { describe, expect, it, layer } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Option } from "effect";
 import { Reactivity } from "effect/reactivity";
 import { Database } from "../src/db/database.ts";
 import { solveLogically } from "../src/domain/solver.ts";
@@ -71,6 +71,8 @@ layer(TestLayer)("services", (it) => {
       const result = yield* solveGame(second);
       expect(result.rank).toBe(1);
       expect(result.personalBest).toBe(true);
+      expect(yield* games.standing(second)).toEqual(Option.some(result));
+      expect(Option.isNone(yield* games.standing(first))).toBe(true);
 
       const top = yield* (yield* Leaderboard).top({
         category: { kind: "difficulty", difficulty: "easy" },

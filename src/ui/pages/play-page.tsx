@@ -1,4 +1,4 @@
-import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useHotkey, useHotkeys, type UseHotkeyDefinition } from "@tanstack/react-hotkeys";
 import { useDebouncer } from "@tanstack/react-pacer";
 import { useNavigate } from "@tanstack/react-router";
@@ -7,7 +7,15 @@ import { difficultyLabels, levelLabels } from "../../domain/difficulty.ts";
 import { isGiven } from "../../domain/game.ts";
 import { explain } from "../../domain/hints.ts";
 import { colorAt } from "../../domain/palette.ts";
-import { checkPenaltyMs, formatDuration, hintPenaltyMs, isPerfect } from "../../domain/score.ts";
+import { minimumMoves } from "../../domain/puzzle.ts";
+import {
+  checkPenaltyMs,
+  formatDuration,
+  hintPenaltyMs,
+  isPerfect,
+  scoreOf,
+} from "../../domain/score.ts";
+import { shareGrid } from "../../domain/share.ts";
 import {
   createSession,
   lineComplete,
@@ -18,7 +26,7 @@ import {
 import { findConflicts, type Layer } from "../../domain/solver.ts";
 import { lensView, noFocus, placedCount, type LensFocus } from "../../domain/lens.ts";
 import type { GameRecord, GameSnapshot, StartGame } from "../../services/games.ts";
-import { actions, gameQuery } from "../queries.ts";
+import { actions, gameQuery, standingQuery } from "../queries.ts";
 import { Board } from "../components/board.tsx";
 import { Confetti } from "../components/confetti.tsx";
 import { Icon } from "../components/icons.tsx";
@@ -41,23 +49,19 @@ export const PlayPage = ({ id }: { id: string }) => {
 export const modeTitle = (game: Pick<GameRecord, "mode" | "dailyDate">) =>
   game.mode === "daily" ? "Daily puzzle" : game.mode === "quick" ? "Quick play" : "Custom puzzle";
 
+const movesSummary = (game: GameRecord, session: Session) =>
+  `${session.moves.length} moves (minimum ${minimumMoves(game.puzzle)})`;
+
 const shareText = (game: GameRecord, session: Session, elapsedMs: number) => {
   const { size } = game.puzzle;
-  const rows = Array.from({ length: size }, (_, row) =>
-    Array.from({ length: size }, (_, column) => {
-      const cell = row * size + column;
-      const given =
-        Number(isGiven(game.puzzle, cell, "number")) + Number(isGiven(game.puzzle, cell, "color"));
-      return given === 2 ? "⬛" : given === 1 ? "🟨" : "🟩";
-    }).join(""),
-  );
   const label = game.difficulty
     ? difficultyLabels[game.difficulty]
     : `${size}×${size} ${levelLabels[game.puzzle.level]}`;
   return [
     `Tupu · ${modeTitle(game)}${game.dailyDate ? ` ${game.dailyDate}` : ""} · ${label}`,
-    `⏱ ${formatDuration(elapsedMs)}${isPerfect(session) ? " · ✨ clean solve" : ` · 💡${session.hints} 🔎${session.checks}`}`,
-    ...rows,
+    `⏱ ${formatDuration(elapsedMs)} · ${movesSummary(game, session)}`,
+    isPerfect(session) ? "✨ clean solve" : `💡${session.hints} 🔎${session.checks}`,
+    ...shareGrid(session.board),
     game.mode === "custom" ? `seed ${game.puzzle.seed}` : "",
   ]
     .filter(Boolean)
@@ -80,12 +84,14 @@ const GameView = ({ game }: { game: GameRecord }) => {
     mutationFn: actions.completeGame,
     onSettled: () => setShowResult(true),
   });
-  const completion = complete.data ?? null;
   const startNext = useMutation({
     mutationFn: actions.startGame,
     onSuccess: (gameId) => navigate({ to: "/play/$gameId", params: { gameId } }),
   });
   const [session, dispatch] = useReducer(reduce, game, (record) => createSession(record));
+  const standing =
+    useQuery({ ...standingQuery(game.id), enabled: session.solved || game.status === "solved" })
+      .data ?? null;
   const [paused, setPaused] = useState(false);
   const [lens, setLens] = useState(false);
   const [lensFocus, setLensFocus] = useState<LensFocus>(noFocus);
@@ -361,6 +367,9 @@ const GameView = ({ game }: { game: GameRecord }) => {
   };
 
   const finalElapsed = alreadySolved ? game.elapsedMs : elapsed();
+  const scoreMs =
+    game.scoreMs ??
+    scoreOf({ elapsedMs: finalElapsed, hints: session.hints, checks: session.checks });
   const hintView = session.hint;
   const explanation = hintView?.deduction ? explain(hintView.deduction) : null;
 
@@ -522,14 +531,10 @@ const GameView = ({ game }: { game: GameRecord }) => {
                 }
                 lockedNumber={!lensOn && lockedNumber}
                 lockedColor={!lensOn && lockedColor}
-                counts={
-                  lensOn
-                    ? {
-                        numbers: values.map((value) => placedCount(session.board, "number", value)),
-                        colors: values.map((value) => placedCount(session.board, "color", value)),
-                      }
-                    : undefined
-                }
+                counts={{
+                  numbers: values.map((value) => placedCount(session.board, "number", value)),
+                  colors: values.map((value) => placedCount(session.board, "color", value)),
+                }}
                 shapes={settings.colorblindShapes}
                 colorKeys={colorKeys}
                 onNumber={(value) => place("number", value)}
@@ -593,8 +598,21 @@ const GameView = ({ game }: { game: GameRecord }) => {
           {(session.solved || alreadySolved) && (
             <Card tone="mint" className="p-5">
               <p className="font-display text-2xl font-extrabold">Board complete.</p>
-              <p className="mt-1">Solved in {formatDuration(finalElapsed)}.</p>
-              <div className="mt-4 flex flex-wrap gap-2">
+              <p className="mt-1">
+                Solved in {formatDuration(finalElapsed)} · score{" "}
+                <strong className="tabular-nums">{formatDuration(scoreMs)}</strong>
+              </p>
+              <p className="text-sm text-ink-soft">{movesSummary(game, session)}</p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <Button
+                  tone="ink"
+                  icon="play"
+                  className="col-span-2"
+                  disabled={startNext.isPending}
+                  onClick={playNext}
+                >
+                  {game.mode === "daily" ? "Back home" : "Next puzzle"}
+                </Button>
                 <Button
                   icon="film"
                   onClick={() =>
@@ -605,9 +623,6 @@ const GameView = ({ game }: { game: GameRecord }) => {
                 </Button>
                 <Button icon="share" onClick={detach(share)}>
                   {copied ? "Copied!" : "Share"}
-                </Button>
-                <Button tone="ink" icon="play" disabled={startNext.isPending} onClick={playNext}>
-                  {game.mode === "daily" ? "Home" : "Next"}
                 </Button>
               </div>
             </Card>
@@ -627,7 +642,7 @@ const GameView = ({ game }: { game: GameRecord }) => {
 
       {showResult && settings.animations && <Confetti />}
       <Modal open={showResult} onClose={() => setShowResult(false)} label="Puzzle solved">
-        <Card className="ruled overflow-hidden p-6">
+        <Card className="ruled overflow-hidden p-5 sm:p-6">
           <span className="tape -top-2 left-1/2 -translate-x-1/2" />
           <p className="mt-2 inline-block animate-stamp rounded-lg border-[3px] border-danger px-3 py-1 font-display text-3xl font-extrabold text-danger">
             {isPerfect(session) ? "CLEAN SOLVE" : "SOLVED"}
@@ -646,32 +661,38 @@ const GameView = ({ game }: { game: GameRecord }) => {
               value={`${session.checks}`}
               detail={session.checks ? `+${formatDuration(session.checks * checkPenaltyMs)}` : "—"}
             />
-            <Stat
-              label="Score"
-              value={completion ? formatDuration(completion.scoreMs) : "…"}
-              detail="lower is better"
-            />
+            <Stat label="Score" value={formatDuration(scoreMs)} detail="lower is better" />
           </dl>
-          {completion && (
-            <p className="mt-4 font-bold">
-              #{completion.rank} of {completion.entries} on this board
-              {completion.personalBest ? " · new personal best!" : ""}
-            </p>
-          )}
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Button tone="ink" icon="play" disabled={startNext.isPending} onClick={playNext}>
+          <p className="mt-4 font-bold">
+            {movesSummary(game, session)}
+            {standing &&
+              ` · #${standing.rank} of ${standing.entries} on this board${standing.personalBest ? " · new personal best!" : ""}`}
+          </p>
+          <div className="mt-6 grid grid-cols-3 gap-2">
+            <Button
+              tone="ink"
+              icon="play"
+              className="col-span-3"
+              disabled={startNext.isPending}
+              onClick={playNext}
+            >
               {game.mode === "daily" ? "Back home" : "Next puzzle"}
             </Button>
-            <Button icon="share" onClick={detach(share)}>
+            <Button size="compact" icon="share" onClick={detach(share)}>
               {copied ? "Copied!" : "Share"}
             </Button>
             <Button
+              size="compact"
               icon="film"
               onClick={() => void navigate({ to: "/replay/$gameId", params: { gameId: game.id } })}
             >
               Replay
             </Button>
-            <Button icon="trophy" onClick={() => void navigate({ to: "/leaderboard" })}>
+            <Button
+              size="compact"
+              icon="trophy"
+              onClick={() => void navigate({ to: "/leaderboard" })}
+            >
               Board
             </Button>
           </div>

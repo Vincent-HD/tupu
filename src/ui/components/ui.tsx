@@ -27,11 +27,12 @@ export const Button = ({
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   tone?: Tone;
   icon?: IconName;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "compact" | "lg";
 }) => {
   const sizes = {
     sm: "h-9 px-3 text-sm gap-1.5 rounded-lg",
     md: "h-11 px-4 text-base gap-2 rounded-xl",
+    compact: "h-11 px-2 text-sm sm:text-base gap-1.5 rounded-xl",
     lg: "h-14 px-6 text-lg gap-2.5 rounded-2xl",
   };
   return (
@@ -40,7 +41,7 @@ export const Button = ({
       className={`press inline-flex shrink-0 cursor-pointer items-center justify-center border-[2.5px] border-ink font-bold shadow-hard select-none disabled:cursor-not-allowed disabled:opacity-45 ${sizes[size]} ${toneClasses[tone]} ${className}`}
       {...props}
     >
-      {icon && <Icon name={icon} className="text-[1.15em]" />}
+      {icon && <Icon name={icon} className="shrink-0 text-[1.15em]" />}
       {children}
     </button>
   );
@@ -192,7 +193,9 @@ export const Modal = ({
         <div
           className="max-h-[92dvh] w-full max-w-md animate-float-in overflow-y-auto pb-[env(safe-area-inset-bottom)]"
           onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape") event.stopPropagation();
+          }}
         >
           {children}
         </div>

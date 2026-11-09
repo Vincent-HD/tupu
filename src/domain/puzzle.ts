@@ -28,3 +28,5 @@ export const givenKnowledge = (puzzle: Puzzle): Knowledge => ({
 
 export const givenCount = (puzzle: Puzzle) =>
   puzzle.givenNumbers.filter(Boolean).length + puzzle.givenColors.filter(Boolean).length;
+
+export const minimumMoves = (puzzle: Puzzle) => puzzle.size * puzzle.size * 2 - givenCount(puzzle);

@@ -53,11 +53,13 @@ export const Keypad = ({
             data-pressed={number === value}
             aria-label={`Number ${value + 1}`}
             onClick={() => onNumber(value)}
-            className={`${keyClass} font-display text-2xl font-extrabold ${number === value ? "bg-marker" : "bg-card"}`}
+            className={`${keyClass} font-display text-2xl font-extrabold ${number === value ? "bg-ink text-paper" : "bg-card"}`}
           >
             {value + 1}
             {badge(counts?.numbers[value])}
-            <span className="absolute right-1 bottom-0.5 hidden text-[10px] font-bold text-ink-soft sm:block">
+            <span
+              className={`absolute right-1 bottom-0.5 hidden text-[10px] font-bold sm:block ${number === value ? "text-paper/70" : "text-ink-soft"}`}
+            >
               {value + 1}
             </span>
           </button>

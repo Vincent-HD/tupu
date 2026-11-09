@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { today, weekdayOf } from "../domain/calendar.ts";
 import { dailyDifficulty, difficulties } from "../domain/difficulty.ts";
 import { generatePuzzle } from "../domain/generator.ts";
@@ -44,6 +44,15 @@ export const gameQuery = (id: string) =>
   queryOptions({
     queryKey: ["games", "record", id],
     queryFn: () => runtime.runPromise(Effect.flatMap(Games, (games) => games.get(id))),
+  });
+
+export const standingQuery = (id: string) =>
+  queryOptions({
+    queryKey: ["games", "standing", id],
+    queryFn: () =>
+      runtime.runPromise(
+        Effect.flatMap(Games, (games) => games.standing(id)).pipe(Effect.map(Option.getOrNull)),
+      ),
   });
 
 export const dailiesQuery = (range: { readonly from: string; readonly to: string }) =>

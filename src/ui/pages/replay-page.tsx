@@ -2,6 +2,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { startingProgress, withValue, type Board as BoardState } from "../../domain/game.ts";
+import { minimumMoves } from "../../domain/puzzle.ts";
 import { formatDuration } from "../../domain/score.ts";
 import type { GameRecord } from "../../services/games.ts";
 import { gameQuery } from "../queries.ts";
@@ -30,12 +31,14 @@ export const ReplayPage = ({ id }: { id: string }) => {
   );
 };
 
+const moveIntervalMs = 800;
+
 const Replay = ({ game }: { game: GameRecord }) => {
   const settings = useSettings();
   const play = useSound();
   const [position, setPosition] = useState(0);
   const [playing, setPlaying] = useState(true);
-  const [speed, setSpeed] = useState(4);
+  const [speed, setSpeed] = useState(2);
   const moves = game.moves;
   const boards = useMemo(() => {
     const start = startingProgress(game.puzzle);
@@ -51,15 +54,12 @@ const Replay = ({ game }: { game: GameRecord }) => {
 
   useEffect(() => {
     if (!playing || position >= moves.length) return;
-    const current = moves[position - 1]?.at ?? 0;
-    const next = moves[position]?.at ?? current;
-    const delay = Math.min(1200, Math.max(60, (next - current) / speed));
     const timer = window.setTimeout(() => {
       const move = moves[position];
       if (move?.value === null) play("erase");
       else if (move) play(move.layer, move.value);
       setPosition((value) => value + 1);
-    }, delay);
+    }, moveIntervalMs / speed);
     return () => window.clearTimeout(timer);
   }, [playing, position, moves, speed, play]);
 
@@ -85,7 +85,8 @@ const Replay = ({ game }: { game: GameRecord }) => {
         <div>
           <p className="font-display text-xl font-extrabold">{modeTitle(game)}</p>
           <p className="text-sm text-ink-soft">
-            {moves.length} moves · solved in {formatDuration(game.elapsedMs)}
+            {moves.length} moves (minimum {minimumMoves(game.puzzle)}) · solved in{" "}
+            {formatDuration(game.elapsedMs)}
           </p>
         </div>
         <p className="font-display text-4xl font-extrabold tabular-nums">
