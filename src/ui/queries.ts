@@ -102,40 +102,55 @@ export const tutorialQuery = queryOptions({
     ),
 });
 
+const pendingWrites = new Set<Promise<unknown>>();
+
+const tracked = <A>(promise: Promise<A>): Promise<A> => {
+  pendingWrites.add(promise);
+  const forget = () => pendingWrites.delete(promise);
+  promise.then(forget, forget);
+  return promise;
+};
+
+export const settleWrites = () => Promise.allSettled(pendingWrites);
+
 export const actions = {
   updateSettings: (patch: Partial<Settings>) =>
-    runtime.runPromise(
-      Effect.gen(function* () {
-        const next = yield* (yield* SettingsStore).update(patch);
-        yield* (yield* Sound).configure({ enabled: next.sound, volume: next.volume });
-        return next;
-      }),
+    tracked(
+      runtime.runPromise(
+        Effect.gen(function* () {
+          const next = yield* (yield* SettingsStore).update(patch);
+          yield* (yield* Sound).configure({ enabled: next.sound, volume: next.volume });
+          return next;
+        }),
+      ),
     ),
   configureSound: (input: { readonly enabled: boolean; readonly volume: number }) =>
     runtime.runFork(Effect.flatMap(Sound, (sound) => sound.configure(input))),
   play: (input: PlayInput) => runtime.runFork(Effect.flatMap(Sound, (sound) => sound.play(input))),
   startGame: (input: StartGame) =>
-    runtime.runPromise(Effect.flatMap(Games, (games) => games.start(input))),
+    tracked(runtime.runPromise(Effect.flatMap(Games, (games) => games.start(input)))),
   saveGame: (snapshot: GameSnapshot) =>
-    runtime.runPromise(Effect.flatMap(Games, (games) => games.save(snapshot))),
+    tracked(runtime.runPromise(Effect.flatMap(Games, (games) => games.save(snapshot)))),
   completeGame: (snapshot: GameSnapshot) =>
-    runtime.runPromise(Effect.flatMap(Games, (games) => games.complete(snapshot))),
+    tracked(runtime.runPromise(Effect.flatMap(Games, (games) => games.complete(snapshot)))),
   removeGame: (id: string) =>
-    runtime.runPromise(Effect.flatMap(Games, (games) => games.remove(id))),
+    tracked(runtime.runPromise(Effect.flatMap(Games, (games) => games.remove(id)))),
   createPlayer: (name: string) =>
-    runtime.runPromise(
-      Effect.gen(function* () {
-        const players = yield* Players;
-        const player = yield* players.create(name);
-        yield* players.select(player.id);
-        return player;
-      }),
+    tracked(
+      runtime.runPromise(
+        Effect.gen(function* () {
+          const players = yield* Players;
+          const player = yield* players.create(name);
+          yield* players.select(player.id);
+          return player;
+        }),
+      ),
     ),
   selectPlayer: (id: string) =>
-    runtime.runPromise(Effect.flatMap(Players, (players) => players.select(id))),
+    tracked(runtime.runPromise(Effect.flatMap(Players, (players) => players.select(id)))),
   renamePlayer: (input: { readonly id: string; readonly name: string }) =>
-    runtime.runPromise(Effect.flatMap(Players, (players) => players.rename(input))),
+    tracked(runtime.runPromise(Effect.flatMap(Players, (players) => players.rename(input)))),
   exportBackup: () => runtime.runPromise(Effect.flatMap(Backup, (backup) => backup.snapshot)),
   restoreBackup: (bytes: Uint8Array) =>
-    runtime.runPromise(Effect.flatMap(Backup, (backup) => backup.restore(bytes))),
+    tracked(runtime.runPromise(Effect.flatMap(Backup, (backup) => backup.restore(bytes)))),
 };
