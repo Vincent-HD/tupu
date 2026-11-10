@@ -21,23 +21,23 @@ export const PairMatrix = ({
   }
   const used = [...counts.values()].filter((count) => count > 0).length;
   return (
-    <div>
-      <div className="mb-2 flex items-baseline justify-between">
+    <div className="mx-auto w-fit max-w-full">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
         <p className="font-display font-extrabold">Pair tracker</p>
         <p className="text-sm font-bold text-ink-soft">
           {used}/{size * size}
         </p>
       </div>
       <div
-        className="grid gap-1"
-        style={{ gridTemplateColumns: `1.6rem repeat(${size}, minmax(0, 1fr))` }}
+        className="grid gap-1.5"
+        style={{ gridTemplateColumns: `1.25rem repeat(${size}, minmax(0, 2.25rem))` }}
         onMouseLeave={() => onFocus(null)}
       >
         <span />
         {Array.from({ length: size }, (_, color) => (
           <span
             key={color}
-            className="mx-auto mb-0.5 h-2.5 w-full max-w-8 rounded-sm border-2 border-ink"
+            className="mb-0.5 h-2.5 rounded-sm border-2 border-ink"
             style={{ backgroundColor: colorAt(color).fill }}
           />
         ))}
@@ -56,7 +56,7 @@ export const PairMatrix = ({
                   aria-label={`${colorAt(color).name} ${number + 1}: ${count === 0 ? "not placed" : count > 1 ? "placed twice" : "placed"}`}
                   onClick={() => onFocus(active ? null : { number, color })}
                   onMouseEnter={() => onFocus({ number, color })}
-                  className={`mx-auto flex aspect-square w-full max-w-8 cursor-pointer items-center justify-center rounded-md border-2 text-xs font-extrabold transition-transform ${active ? "scale-110 border-ink" : "border-ink/30"} ${count > 1 ? "bg-danger text-white" : ""}`}
+                  className={`flex aspect-square cursor-pointer items-center justify-center rounded-md border-2 text-xs font-extrabold transition-transform ${active ? "scale-110 border-ink" : "border-ink/30"} ${count > 1 ? "bg-danger text-white" : ""}`}
                   style={
                     count === 1
                       ? { backgroundColor: colorAt(color).fill, borderColor: "var(--ink)" }
