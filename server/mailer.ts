@@ -29,7 +29,14 @@ const SendResult = Schema.Struct({
   errors: Schema.Array(Schema.Struct({ code: Schema.Finite, message: Schema.String })),
 });
 
-const fromAddress = Config.String("MAIL_FROM");
+// Cloudflare documents only a bare address for the sender; a stray quote or a
+// display name from the environment fails at startup instead of on each send.
+const SenderAddress = Schema.String.check(
+  Schema.isPattern(/^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/, {
+    message: "MAIL_FROM must be a bare address, such as noreply@tupu.example.com",
+  }),
+);
+const fromAddress = Config.schema(SenderAddress, "MAIL_FROM");
 
 export class Mailer extends Context.Service<
   Mailer,
@@ -84,7 +91,8 @@ export class Mailer extends Context.Service<
             ),
           );
           const result = yield* HttpIncomingMessage.schemaBodyJson(SendResult)(response);
-          if (!result.success) return yield* new MailError({ cause: result.errors });
+          if (!result.success)
+            return yield* new MailError({ cause: { errors: result.errors, from, to: mail.to } });
         },
         Effect.mapError((cause) => (cause instanceof MailError ? cause : new MailError({ cause }))),
       );

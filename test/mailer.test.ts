@@ -15,13 +15,13 @@ const cloudflare = (reply: { readonly status: number; readonly body: unknown }) 
   return { received, fetch };
 };
 
-const layerWith = (fetch: typeof globalThis.fetch) =>
+const layerWith = (fetch: typeof globalThis.fetch, mailFrom = "code@tupu.example.com") =>
   Mailer.layerFromConfig.pipe(
     Layer.provide(
       ConfigProvider.layer(
         ConfigProvider.fromEnv({
           env: {
-            MAIL_FROM: "code@tupu.example.com",
+            MAIL_FROM: mailFrom,
             CLOUDFLARE_ACCOUNT_ID: "account-1",
             CLOUDFLARE_EMAIL_API_TOKEN: "secret-token",
           },
@@ -67,6 +67,19 @@ describe("Cloudflare Email Sending", () => {
       });
       const error = yield* Effect.flip(send.pipe(Effect.provide(layerWith(api.fetch))));
       expect(error._tag).toBe("MailError");
+    }),
+  );
+});
+
+describe("MAIL_FROM", () => {
+  it.effect("must be a bare address", () =>
+    Effect.gen(function* () {
+      const api = cloudflare({ status: 200, body: { success: true, errors: [] } });
+      for (const mailFrom of ['"code@tupu.example.com"', "Tupu <code@tupu.example.com>"]) {
+        const error = yield* Effect.flip(send.pipe(Effect.provide(layerWith(api.fetch, mailFrom))));
+        expect(String(error)).toContain("MAIL_FROM must be a bare address");
+      }
+      expect(api.received).toEqual([]);
     }),
   );
 });
