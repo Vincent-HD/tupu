@@ -89,7 +89,7 @@ In CI, set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` instead of using a
 
 ### Docker
 
-The image builds the app, then runs an Effect HTTP server on Node ([`server/main.ts`](server/main.ts), bundled into one file by `pnpm build:server`). It serves `dist/` with SPA fallback, ETags, the right MIME types for WebAssembly and the manifest, and per-path cache headers, answers RPC calls on `POST /rpc` and serves better-auth under `/api/auth`. It sends email through the Cloudflare Email Sending REST API. Accounts and games are stored in a SQLite file under `/app/data`, a volume in [`compose.yaml`](compose.yaml). It listens on plain HTTP port 8080 as the unprivileged `node` user; put your own reverse proxy in front for HTTPS, which passkeys, the PWA and OPFS storage require outside `localhost`. `GET /healthz` answers `ok`.
+The image builds the app, then runs an Effect HTTP server on Node ([`server/main.ts`](server/main.ts), bundled by `pnpm build:server` into `dist-server/`). It serves `dist/` with SPA fallback, ETags, the right MIME types for WebAssembly and the manifest, and per-path cache headers, answers RPC calls on `POST /rpc` and serves better-auth under `/api/auth`. It sends email through the Cloudflare Email Sending REST API. Accounts and games are stored in a SQLite file under `/app/data`, a volume in [`compose.yaml`](compose.yaml). It listens on plain HTTP port 8080 as the unprivileged `node` user; put your own reverse proxy in front for HTTPS, which passkeys, the PWA and OPFS storage require outside `localhost`. `GET /healthz` answers `ok`.
 
 ```sh
 export BETTER_AUTH_SECRET=$(openssl rand -base64 32)

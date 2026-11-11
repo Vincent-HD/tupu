@@ -13,10 +13,10 @@ ENV NODE_ENV=production PORT=8080 STATIC_ROOT=/app/dist DATABASE_PATH=/app/data/
 WORKDIR /app
 RUN mkdir -p /app/data && chown node:node /app/data
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/dist-server/server.mjs ./server.mjs
+COPY --from=build /app/dist-server ./server
 USER node
 VOLUME /app/data
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
   CMD node -e "fetch('http://127.0.0.1:' + process.env.PORT + '/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
-CMD ["node", "server.mjs"]
+CMD ["node", "server/server.mjs"]
