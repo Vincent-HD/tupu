@@ -1,15 +1,17 @@
 import { queryOptions } from "@tanstack/react-query";
 import { Effect, Option } from "effect";
+import type { LeaderboardCategory } from "../api/rpc.ts";
 import { today, weekdayOf } from "../domain/calendar.ts";
 import { dailyDifficulty, difficulties } from "../domain/difficulty.ts";
 import { generatePuzzle } from "../domain/generator.ts";
-import { Backup } from "../services/backup.ts";
+import { AccountStore } from "../services/account-store.ts";
+import { Api } from "../services/api.ts";
+import { AuthClient } from "../services/auth-client.ts";
 import { Games, type GameSnapshot, type StartGame } from "../services/games.ts";
-import { Leaderboard, type LeaderboardCategory } from "../services/leaderboard.ts";
-import { Players } from "../services/players.ts";
 import { SettingsStore, type Settings } from "../services/settings.ts";
 import { Sound, type PlayInput } from "../services/sound.ts";
 import { Stats } from "../services/stats.ts";
+import { Sync } from "../services/sync.ts";
 import { runtime } from "./runtime.ts";
 
 export const settingsQuery = queryOptions({
@@ -17,14 +19,22 @@ export const settingsQuery = queryOptions({
   queryFn: () => runtime.runPromise(Effect.flatMap(SettingsStore, (store) => store.get)),
 });
 
-export const currentPlayerQuery = queryOptions({
-  queryKey: ["players", "current"],
-  queryFn: () => runtime.runPromise(Effect.flatMap(Players, (players) => players.current)),
+export const accountQuery = queryOptions({
+  queryKey: ["account"],
+  queryFn: () =>
+    runtime.runPromise(
+      Effect.flatMap(AccountStore, (accounts) => accounts.account).pipe(
+        Effect.map(Option.getOrNull),
+      ),
+    ),
 });
 
-export const playersQuery = queryOptions({
-  queryKey: ["players", "list"],
-  queryFn: () => runtime.runPromise(Effect.flatMap(Players, (players) => players.list)),
+export const syncQuery = queryOptions({
+  queryKey: ["sync"],
+  queryFn: () =>
+    runtime.runPromise(
+      Effect.flatMap(Sync, (sync) => Effect.all({ state: sync.state, pending: sync.pending })),
+    ),
 });
 
 export const todayQuery = queryOptions({
@@ -48,10 +58,13 @@ export const gameQuery = (id: string) =>
 
 export const standingQuery = (id: string) =>
   queryOptions({
-    queryKey: ["games", "standing", id],
+    queryKey: ["leaderboard", "standing", id],
     queryFn: () =>
       runtime.runPromise(
-        Effect.flatMap(Games, (games) => games.standing(id)).pipe(Effect.map(Option.getOrNull)),
+        Effect.gen(function* () {
+          yield* (yield* Sync).run;
+          return yield* (yield* Api).Standing({ gameId: id });
+        }).pipe(Effect.orElseSucceed(() => null)),
       ),
   });
 
@@ -92,15 +105,16 @@ export const leaderboardQuery = (key: string) =>
     queryKey: ["leaderboard", "top", key],
     queryFn: () =>
       runtime.runPromise(
-        Effect.flatMap(Leaderboard, (board) =>
-          board.top({ category: parseCategory(key), limit: 10 }),
-        ),
+        Effect.flatMap(Api, (api) => api.Leaderboard({ category: parseCategory(key), limit: 10 })),
       ),
   });
 
 export const customCategoriesQuery = queryOptions({
   queryKey: ["leaderboard", "custom-categories"],
-  queryFn: () => runtime.runPromise(Effect.flatMap(Leaderboard, (board) => board.customCategories)),
+  queryFn: () =>
+    runtime.runPromise(
+      Effect.flatMap(Api, (api) => api.CustomBoards()).pipe(Effect.orElseSucceed(() => [])),
+    ),
 });
 
 export const tutorialQuery = queryOptions({
@@ -144,22 +158,30 @@ export const actions = {
     tracked(runtime.runPromise(Effect.flatMap(Games, (games) => games.complete(snapshot)))),
   removeGame: (id: string) =>
     tracked(runtime.runPromise(Effect.flatMap(Games, (games) => games.remove(id)))),
-  createPlayer: (name: string) =>
+  sendCode: (email: string) =>
+    runtime.runPromise(Effect.flatMap(AuthClient, (auth) => auth.sendCode(email))),
+  verifyCode: (input: { readonly email: string; readonly code: string }) =>
+    tracked(runtime.runPromise(Effect.flatMap(AuthClient, (auth) => auth.verifyCode(input)))),
+  signInWithPasskey: () =>
+    tracked(runtime.runPromise(Effect.flatMap(AuthClient, (auth) => auth.signInWithPasskey))),
+  addPasskey: () => runtime.runPromise(Effect.flatMap(AuthClient, (auth) => auth.addPasskey)),
+  rename: (name: string) =>
     tracked(
       runtime.runPromise(
         Effect.gen(function* () {
-          const players = yield* Players;
-          const player = yield* players.create(name);
-          yield* players.select(player.id);
-          return player;
+          const account = yield* (yield* Api).Rename({ name });
+          yield* (yield* AccountStore).rename(account);
         }),
       ),
     ),
-  selectPlayer: (id: string) =>
-    tracked(runtime.runPromise(Effect.flatMap(Players, (players) => players.select(id)))),
-  renamePlayer: (input: { readonly id: string; readonly name: string }) =>
-    tracked(runtime.runPromise(Effect.flatMap(Players, (players) => players.rename(input)))),
-  exportBackup: () => runtime.runPromise(Effect.flatMap(Backup, (backup) => backup.snapshot)),
-  restoreBackup: (bytes: Uint8Array) =>
-    tracked(runtime.runPromise(Effect.flatMap(Backup, (backup) => backup.restore(bytes)))),
+  syncNow: () => runtime.runPromise(Effect.flatMap(Sync, (sync) => sync.run)),
+  signOut: () =>
+    tracked(
+      runtime.runPromise(
+        Effect.gen(function* () {
+          yield* (yield* Sync).run;
+          yield* (yield* AuthClient).signOut;
+        }),
+      ),
+    ),
 };

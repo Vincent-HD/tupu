@@ -3,13 +3,15 @@ import { QueryClient } from "@tanstack/react-query";
 import { Effect, Layer, ManagedRuntime, Stream } from "effect";
 import { Reactivity } from "effect/reactivity";
 import { Database } from "../db/database.ts";
-import { Backup } from "../services/backup.ts";
+import { AccountStore } from "../services/account-store.ts";
+import { Api } from "../services/api.ts";
 import { Games } from "../services/games.ts";
-import { Leaderboard } from "../services/leaderboard.ts";
-import { Players } from "../services/players.ts";
+import { AuthClient } from "../services/auth-client.ts";
 import { SettingsStore } from "../services/settings.ts";
 import { Sound } from "../services/sound.ts";
 import { Stats } from "../services/stats.ts";
+import { Sync } from "../services/sync.ts";
+import { SyncTriggers } from "./sync-triggers.ts";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,22 +38,28 @@ const SqlLive = SqliteClient.layer({
   ),
 });
 
-const GamesLive = Games.layer.pipe(Layer.provideMerge(Players.layer));
-
-const ServicesLive = Layer.mergeAll(Stats.layer, Leaderboard.layer, Backup.layer).pipe(
-  Layer.provideMerge(GamesLive),
-  Layer.provideMerge(SettingsStore.layer),
+const LocalLive = Layer.mergeAll(Games.layer, SettingsStore.layer, AccountStore.layer).pipe(
   Layer.provideMerge(Database.layer),
   Layer.provideMerge(SqlLive),
+);
+
+const RemoteLive = Layer.mergeAll(Sync.layer, AuthClient.layer(`${location.origin}/api/auth`)).pipe(
+  Layer.provideMerge(Api.layer("/rpc")),
+);
+
+const ServicesLive = Layer.mergeAll(Stats.layer, SyncTriggers).pipe(
+  Layer.provideMerge(RemoteLive),
+  Layer.provideMerge(LocalLive),
   Layer.merge(Sound.layer),
 );
 
 const queryKeysByReactivityKey: Readonly<Record<string, ReadonlyArray<ReadonlyArray<string>>>> = {
-  settings: [["settings"], ["players"]],
-  players: [["players"], ["games"], ["stats"], ["leaderboard"]],
+  settings: [["settings"]],
+  account: [["account"], ["games"], ["stats"], ["leaderboard"]],
   games: [["games"], ["stats"], ["leaderboard"]],
   stats: [["stats"]],
-  leaderboard: [["leaderboard"]],
+  sync: [["sync"]],
+  "local-writes": [["sync"]],
 };
 
 const QueryInvalidationLive = Layer.effectDiscard(

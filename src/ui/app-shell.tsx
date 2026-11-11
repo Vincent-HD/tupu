@@ -6,7 +6,7 @@ import { Wordmark } from "./components/logo.tsx";
 import { PwaBanner } from "./components/pwa-banner.tsx";
 import { IconButton } from "./components/ui.tsx";
 import { useSettings } from "./hooks/use-settings.ts";
-import { actions, currentPlayerQuery } from "./queries.ts";
+import { accountQuery, actions, syncQuery } from "./queries.ts";
 
 const themeKey = "tupu:theme";
 const darkQuery = "(prefers-color-scheme: dark)";
@@ -72,12 +72,39 @@ const navItems: ReadonlyArray<{
   { to: "/settings", icon: "gear", label: "Settings" },
 ];
 
-const focusedPaths = ["/play/", "/replay/", "/tutorial"];
+const focusedPaths = ["/play/", "/replay/", "/tutorial", "/login"];
+
+const SyncBadge = () => {
+  const sync = useQuery(syncQuery).data;
+  if (!sync) return null;
+  const { status } = sync.state;
+  const offline = status === "offline" || status === "expired";
+  const label =
+    status === "expired"
+      ? "Session expired: sign in again to sync"
+      : offline
+        ? `Offline${sync.pending ? `: ${sync.pending} change${sync.pending > 1 ? "s" : ""} waiting` : ""}`
+        : status === "syncing"
+          ? "Syncing"
+          : sync.pending
+            ? "Waiting to sync"
+            : "All games synced";
+  return (
+    <Link
+      to={status === "expired" ? "/login" : "/settings"}
+      aria-label={label}
+      title={label}
+      className={`flex size-10 items-center justify-center rounded-xl border-[2.5px] border-ink text-lg shadow-hard-sm ${status === "expired" ? "bg-danger text-white" : offline ? "bg-paper-deep" : "bg-card"} ${status === "syncing" ? "animate-pulse" : ""}`}
+    >
+      <Icon name={offline ? "cloudOff" : "cloud"} />
+    </Link>
+  );
+};
 
 export const AppShell = () => {
   const { settings, dark } = useTheme();
   const updateSettings = useMutation({ mutationFn: actions.updateSettings });
-  const player = useQuery(currentPlayerQuery).data;
+  const account = useQuery(accountQuery).data;
   const pathname = useLocation({ select: (location) => location.pathname });
   const focused = focusedPaths.some((path) => pathname.startsWith(path));
   return (
@@ -87,7 +114,10 @@ export const AppShell = () => {
           <Link to="/" aria-label="Tupu home">
             <Wordmark />
           </Link>
-          <nav className="ml-auto hidden items-center gap-1 md:flex" aria-label="Main">
+          <nav
+            className={`ml-auto hidden items-center gap-1 ${account ? "md:flex" : ""}`}
+            aria-label="Main"
+          >
             {navItems.map((item) => (
               <Link
                 key={item.to}
@@ -100,14 +130,15 @@ export const AppShell = () => {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-2 md:ml-2">
-            {player && (
+            {account && (
               <Link
-                to="/leaderboard"
+                to="/settings"
                 className="hidden max-w-36 items-center gap-1.5 truncate rounded-full border-2 border-ink bg-card px-3 py-1 text-sm font-bold sm:flex"
               >
-                <Icon name="user" /> {player.name}
+                <Icon name="user" /> {account.name}
               </Link>
             )}
+            {account && <SyncBadge />}
             <IconButton
               icon={dark ? "sun" : "moon"}
               label={dark ? "Switch to the light theme" : "Switch to the dark theme"}
@@ -128,10 +159,10 @@ export const AppShell = () => {
         <Outlet />
       </main>
       <footer className="hidden px-4 pb-8 text-center text-sm text-ink-soft md:block">
-        Local-first: your puzzles, stats and players live in a SQLite file inside this browser.
+        Your games live on this device and sync to your account whenever you are online.
         <span className="mt-1 block">For Tupu, a very good cat. 🐾</span>
       </footer>
-      {!focused && (
+      {!focused && account && (
         <nav
           className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 flex justify-around rounded-2xl border-[2.5px] border-ink bg-card p-1.5 shadow-hard md:hidden"
           aria-label="Main"

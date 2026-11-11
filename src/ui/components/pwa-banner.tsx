@@ -57,7 +57,7 @@ export const PwaBanner = () => {
       <div className={`${base} bg-paper-deep`} role="status">
         <Icon name="check" className="shrink-0 text-xl" />
         <span className="text-sm">
-          Offline. Everything still works: puzzles are made and saved on this device.
+          Offline. Keep playing: your games sync as soon as you are back online.
         </span>
       </div>
     );
@@ -70,7 +70,7 @@ export const PwaBanner = () => {
       >
         <Icon name="download" className="shrink-0 text-xl" />
         <span className="flex-1 text-sm">
-          Ready to play offline. No account, no connection needed.
+          Ready to play offline. Your games sync whenever you reconnect.
         </span>
         <Icon name="x" className="shrink-0" />
       </button>

@@ -73,8 +73,8 @@ export const HomePage = () => {
           </h1>
           <p className="mt-4 max-w-md text-base text-ink-soft sm:text-lg">
             Fill each tile with a number and a color. Rows and columns never repeat either, and no
-            two tiles share the same combination. Play as much as you like: it all lives on this
-            device.
+            two tiles share the same combination. Play as much as you like, even offline: your games
+            sync to your account.
           </p>
         </div>
         <DailyCard
@@ -154,7 +154,7 @@ export const HomePage = () => {
           icon="trophy"
           tone="tangerine"
           title="Leaderboard"
-          text="Local players race on the same boards."
+          text="Race everyone on the same boards."
         />
         <NavCard
           to="/rules"
@@ -210,7 +210,13 @@ const DailyCard = ({
           onClick={onPlay}
           className="w-full"
         >
-          {busy ? "Shuffling…" : playing ? "Continue" : best ? "Play again" : "Play today's puzzle"}
+          {busy
+            ? "Shuffling…"
+            : playing
+              ? "Continue"
+              : best
+                ? "See your solve"
+                : "Play today's puzzle"}
         </Button>
       </div>
     </Card>

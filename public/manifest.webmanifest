@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Tupu",
   "short_name": "Tupu",
-  "description": "A local-first logic puzzle of numbers and colors. Plays fully offline.",
+  "description": "A logic puzzle of numbers and colors. Plays offline and syncs to your account.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

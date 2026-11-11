@@ -35,6 +35,10 @@ const serviceWorker = (): Plugin => ({
   },
 });
 
+// In development the API server runs separately (pnpm dev:api); the proxy keeps
+// the Host header so passkeys are bound to the address open in the browser.
+const apiProxy = `http://localhost:${process.env["API_PORT"] ?? "8787"}`;
+
 export default defineConfig({
   plugins: [
     tanstackRouter({
@@ -47,6 +51,8 @@ export default defineConfig({
     serviceWorker(),
   ],
   optimizeDeps: { exclude: ["@effect/wa-sqlite"] },
+  server: { proxy: { "/rpc": apiProxy, "/api/auth": apiProxy } },
+  preview: { proxy: { "/rpc": apiProxy, "/api/auth": apiProxy } },
   worker: { format: "es" },
   build: { chunkSizeWarningLimit: 900 },
   test: { include: ["test/**/*.test.ts"], testTimeout: 60_000 },

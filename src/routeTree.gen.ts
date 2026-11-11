@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ArchiveRouteImport } from './routes/archive'
 import { Route as CustomRouteImport } from './routes/custom'
 import { Route as LeaderboardRouteImport } from './routes/leaderboard'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as RulesRouteImport } from './routes/rules'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StatsRouteImport } from './routes/stats'
@@ -38,6 +39,11 @@ const CustomRoute = CustomRouteImport.update({
 const LeaderboardRoute = LeaderboardRouteImport.update({
   id: '/leaderboard',
   path: '/leaderboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RulesRoute = RulesRouteImport.update({
@@ -76,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/archive': typeof ArchiveRoute
   '/custom': typeof CustomRoute
   '/leaderboard': typeof LeaderboardRoute
+  '/login': typeof LoginRoute
   '/rules': typeof RulesRoute
   '/settings': typeof SettingsRoute
   '/stats': typeof StatsRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/archive': typeof ArchiveRoute
   '/custom': typeof CustomRoute
   '/leaderboard': typeof LeaderboardRoute
+  '/login': typeof LoginRoute
   '/rules': typeof RulesRoute
   '/settings': typeof SettingsRoute
   '/stats': typeof StatsRoute
@@ -101,6 +109,7 @@ export interface FileRoutesById {
   '/archive': typeof ArchiveRoute
   '/custom': typeof CustomRoute
   '/leaderboard': typeof LeaderboardRoute
+  '/login': typeof LoginRoute
   '/rules': typeof RulesRoute
   '/settings': typeof SettingsRoute
   '/stats': typeof StatsRoute
@@ -115,6 +124,7 @@ export interface FileRouteTypes {
     | '/archive'
     | '/custom'
     | '/leaderboard'
+    | '/login'
     | '/rules'
     | '/settings'
     | '/stats'
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/archive'
     | '/custom'
     | '/leaderboard'
+    | '/login'
     | '/rules'
     | '/settings'
     | '/stats'
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/archive'
     | '/custom'
     | '/leaderboard'
+    | '/login'
     | '/rules'
     | '/settings'
     | '/stats'
@@ -152,6 +164,7 @@ export interface RootRouteChildren {
   ArchiveRoute: typeof ArchiveRoute
   CustomRoute: typeof CustomRoute
   LeaderboardRoute: typeof LeaderboardRoute
+  LoginRoute: typeof LoginRoute
   RulesRoute: typeof RulesRoute
   SettingsRoute: typeof SettingsRoute
   StatsRoute: typeof StatsRoute
@@ -188,6 +201,13 @@ declare module '@tanstack/react-router' {
       path: '/leaderboard'
       fullPath: '/leaderboard'
       preLoaderRoute: typeof LeaderboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rules': {
@@ -240,6 +260,7 @@ const rootRouteChildren: RootRouteChildren = {
   ArchiveRoute: ArchiveRoute,
   CustomRoute: CustomRoute,
   LeaderboardRoute: LeaderboardRoute,
+  LoginRoute: LoginRoute,
   RulesRoute: RulesRoute,
   SettingsRoute: SettingsRoute,
   StatsRoute: StatsRoute,

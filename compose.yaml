@@ -5,3 +5,14 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-8080}:8080"
+    environment:
+      TUPU_ORIGIN: ${TUPU_ORIGIN:-}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET, e.g. openssl rand -base64 32}
+      MAIL_FROM: ${MAIL_FROM:-}
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+      CLOUDFLARE_EMAIL_API_TOKEN: ${CLOUDFLARE_EMAIL_API_TOKEN:-}
+    volumes:
+      - tupu-data:/app/data
+
+volumes:
+  tupu-data:

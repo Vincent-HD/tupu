@@ -90,7 +90,7 @@ const GameView = ({ game }: { game: GameRecord }) => {
   });
   const [session, dispatch] = useReducer(reduce, game, (record) => createSession(record));
   const standing =
-    useQuery({ ...standingQuery(game.id), enabled: session.solved || game.status === "solved" })
+    useQuery({ ...standingQuery(game.id), enabled: complete.isSuccess || game.status === "solved" })
       .data ?? null;
   const [paused, setPaused] = useState(false);
   const [lens, setLens] = useState(false);

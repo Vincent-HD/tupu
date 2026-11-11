@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "pnpm dev:api & vite",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -21,11 +21,14 @@
     "cf:login": "alchemy profile edit --add Cloudflare",
     "build:server": "vite build -c vite.server.config.ts",
     "serve": "node server/main.ts",
-    "start": "node dist-server/server.mjs"
+    "start": "node dist-server/server.mjs",
+    "dev:api": "PORT=${API_PORT:-8787} DATABASE_PATH=${DATABASE_PATH:-data/dev.sqlite} node --watch server/main.ts"
   },
   "dependencies": {
+    "@better-auth/passkey": "^1.7.20",
     "@effect/platform-browser": "4.1.2",
     "@effect/platform-node": "4.1.2",
+    "@effect/sql-d1": "4.1.2",
     "@effect/sql-sqlite-wasm": "4.1.2",
     "@effect/wa-sqlite": "0.1.2",
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
@@ -38,6 +41,7 @@
     "@tanstack/react-router": "1.170.46",
     "@tanstack/react-store": "0.11.2",
     "@tanstack/react-table": "9.3.1",
+    "better-auth": "^1.7.20",
     "effect": "4.1.2",
     "kysely": "0.29.8",
     "react": "19.3.1",

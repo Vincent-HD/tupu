@@ -23,7 +23,6 @@ export const Settings = Schema.Struct({
   keyboardLayout: Schema.Literals(keyboardLayouts).pipe(
     Schema.withDecodingDefaultKey(Effect.succeed("auto")),
   ),
-  playerId: Schema.NullOr(Schema.String).pipe(Schema.withDecodingDefaultKey(Effect.succeed(null))),
 });
 export type Settings = typeof Settings.Type;
 

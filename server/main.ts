@@ -1,7 +1,11 @@
 import { createServer } from "node:http";
-import { NodeHttpServer, NodeRuntime } from "@effect/platform-node";
-import { Config, Effect, Layer } from "effect";
+import { dirname } from "node:path";
+import { NodeFileSystem, NodeHttpServer, NodeRuntime } from "@effect/platform-node";
+import { SqliteClient } from "@effect/sql-sqlite-node";
+import { Config, Effect, FileSystem, Layer } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse, HttpStaticServer } from "effect/http";
+import { ApiRoutes } from "./api.ts";
+import { Mailer } from "./mailer.ts";
 
 const cacheControlFor = (pathname: string) =>
   pathname.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache";
@@ -31,9 +35,20 @@ const StaticFiles = Layer.unwrap(
   ),
 );
 
+const SqliteFile = Layer.unwrap(
+  Effect.gen(function* () {
+    const filename = yield* Config.String("DATABASE_PATH").pipe(
+      Config.withDefault("data/tupu.sqlite"),
+    );
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.makeDirectory(dirname(filename), { recursive: true });
+    return SqliteClient.layer({ filename });
+  }),
+).pipe(Layer.provide(NodeFileSystem.layer));
+
 const Routes = Layer.mergeAll(
   StaticFiles,
-  HttpRouter.add("GET", "/healthz", HttpServerResponse.text("ok")),
+  ApiRoutes.pipe(Layer.provide(Layer.mergeAll(SqliteFile, Mailer.layerFromConfig))),
   HttpRouter.add("GET", "/_headers", HttpServerResponse.empty({ status: 404 })),
   SecurityAndCacheHeaders,
 );

@@ -76,3 +76,7 @@ export const wrongValues = (board: Board, puzzle: Puzzle): ReadonlyArray<WrongVa
       : [],
   ),
 ];
+
+// Every account has at most one game per daily date: its id is derived from
+// the date, so the same daily started on two devices is one game.
+export const dailyGameId = (date: string) => `daily-${date}`;

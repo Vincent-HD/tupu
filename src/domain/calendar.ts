@@ -5,9 +5,21 @@ const isoDateOf = (date: DateTime.DateTime) => {
   return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
 };
 
+export const dateInZone = (input: {
+  readonly at: DateTime.DateTime;
+  readonly zone: DateTime.TimeZone;
+}) => isoDateOf(DateTime.setZone(input.at, input.zone));
+
 export const today = Effect.map(DateTime.now, (now) =>
-  isoDateOf(DateTime.setZone(now, DateTime.zoneMakeLocal())),
+  dateInZone({ at: now, zone: DateTime.zoneMakeLocal() }),
 );
+
+const furthestAheadZone = DateTime.zoneMakeOffset(14 * 60 * 60 * 1000);
+
+// UTC+14 (Line Islands) is the first place on Earth to reach a new day, so no
+// player can legitimately have a later local date than this.
+export const latestDailyDate = (at: DateTime.DateTime) =>
+  dateInZone({ at, zone: furthestAheadZone });
 
 export const parseIsoDate = (isoDate: string) => {
   const [year = 1970, month = 1, day = 1] = isoDate.split("-").map(Number);
