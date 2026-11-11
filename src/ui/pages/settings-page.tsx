@@ -1,7 +1,7 @@
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Schema } from "effect";
+import { Predicate, Schema } from "effect";
 import { useState } from "react";
 import { DisplayName } from "../../api/rpc.ts";
 import type { Settings } from "../../services/settings.ts";
@@ -234,6 +234,11 @@ const AccountCard = () => {
   );
 };
 
+const passkeyFailure = (error: unknown) =>
+  Predicate.hasProperty(error, "code") && error.code === "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED"
+    ? "This device already has a passkey for Tupu."
+    : "No passkey was saved. If this keeps failing, sign out and back in with a code first.";
+
 const AddPasskey = () => {
   const add = useMutation({ mutationFn: actions.addPasskey });
   return (
@@ -242,7 +247,7 @@ const AddPasskey = () => {
         {add.isSuccess
           ? "Passkey saved. Use it next time you sign in."
           : add.error
-            ? "No passkey was saved. If this keeps failing, sign out and back in with a code first."
+            ? passkeyFailure(add.error)
             : "Sign in with your fingerprint, face or screen lock instead of an email code."}
       </p>
       <Button size="sm" icon="key" disabled={add.isPending} onClick={() => add.mutate()}>

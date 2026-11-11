@@ -38,9 +38,15 @@ const fromNetwork = async (request: Request) => {
   return response;
 };
 
+// Server routes answer differently each time (sign-in challenges, sessions) and
+// set cookies, so they always go to the network.
+const serverPaths = ["/api/", "/rpc", "/healthz"];
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  if (request.method !== "GET" || new URL(request.url).origin !== self.location.origin) return;
+  const url = new URL(request.url);
+  if (request.method !== "GET" || url.origin !== self.location.origin) return;
+  if (serverPaths.some((path) => url.pathname.startsWith(path))) return;
   if (request.mode === "navigate") {
     event.respondWith(
       caches
