@@ -56,12 +56,18 @@ export const gameQuery = (id: string) =>
     queryFn: () => runtime.runPromise(Effect.flatMap(Games, (games) => games.get(id))),
   });
 
+// Guests have no server rankings, so these skip the network for them.
+const signedIn = Effect.flatMap(AccountStore, (accounts) => accounts.account).pipe(
+  Effect.map(Option.isSome),
+);
+
 export const standingQuery = (id: string) =>
   queryOptions({
     queryKey: ["leaderboard", "standing", id],
     queryFn: () =>
       runtime.runPromise(
         Effect.gen(function* () {
+          if (!(yield* signedIn)) return null;
           yield* (yield* Sync).run;
           return yield* (yield* Api).Standing({ gameId: id });
         }).pipe(Effect.orElseSucceed(() => null)),
@@ -113,7 +119,10 @@ export const customCategoriesQuery = queryOptions({
   queryKey: ["leaderboard", "custom-categories"],
   queryFn: () =>
     runtime.runPromise(
-      Effect.flatMap(Api, (api) => api.CustomBoards()).pipe(Effect.orElseSucceed(() => [])),
+      Effect.gen(function* () {
+        if (!(yield* signedIn)) return [];
+        return yield* (yield* Api).CustomBoards();
+      }).pipe(Effect.orElseSucceed(() => [])),
     ),
 });
 

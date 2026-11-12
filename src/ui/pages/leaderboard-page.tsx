@@ -2,10 +2,17 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper, tableFeatures, useTable } from "@tanstack/react-table";
 import { useMemo } from "react";
-import { asLevel, difficulties, difficultyLabels, levelLabels } from "../../domain/difficulty.ts";
+import { formatShortDate, shiftDate, weekdayOf } from "../../domain/calendar.ts";
+import {
+  asLevel,
+  dailyDifficulty,
+  difficulties,
+  difficultyLabels,
+  levelLabels,
+} from "../../domain/difficulty.ts";
 import { checkPenaltyMs, formatDuration, hintPenaltyMs } from "../../domain/score.ts";
 import type { LeaderboardEntry } from "../../api/rpc.ts";
-import { Card, Chip, IconButton, SectionTitle, Spinner } from "../components/ui.tsx";
+import { Button, Card, Chip, IconButton, SectionTitle, Spinner } from "../components/ui.tsx";
 import { useSound } from "../hooks/use-sound.ts";
 import {
   accountQuery,
@@ -17,13 +24,20 @@ import {
 
 const medals = ["bg-marker", "bg-paper-deep", "bg-tangerine"];
 
-export const LeaderboardPage = ({ board }: { board: string }) => {
+const dailyPrefix = "daily:";
+
+export const LeaderboardPage = (props: { readonly board: string | undefined }) => {
   const today = useSuspenseQuery(todayQuery).data;
   const custom = useSuspenseQuery(customCategoriesQuery).data;
+  const account = useQuery(accountQuery).data;
   const navigate = useNavigate();
   const play = useSound();
+  const board = props.board ?? `${dailyPrefix}${today.date}`;
+  const dailyDate = board.startsWith(dailyPrefix) ? board.slice(dailyPrefix.length) : null;
+  const show = (key: string) =>
+    void navigate({ to: "/leaderboard", search: { board: key }, replace: true });
   const tabs = [
-    { key: `daily:${today.date}`, label: "Today's daily" },
+    { key: `${dailyPrefix}${dailyDate ?? today.date}`, label: "Daily" },
     ...difficulties.map((difficulty) => ({
       key: categoryKey({ kind: "difficulty", difficulty }),
       label: difficultyLabels[difficulty],
@@ -37,45 +51,123 @@ export const LeaderboardPage = ({ board }: { board: string }) => {
     <div className="mx-auto w-full max-w-4xl">
       <div className="mb-6 flex items-center gap-3">
         <IconButton icon="back" label="Back home" onClick={() => void navigate({ to: "/" })} />
-        <SectionTitle kicker="Everyone, same puzzles">Leaderboard</SectionTitle>
+        <SectionTitle kicker="Best times">Leaderboard</SectionTitle>
       </div>
-      <div
-        className="my-5 flex gap-2 overflow-x-auto pt-1 pb-3 pl-1"
-        role="tablist"
-        aria-label="Boards"
-      >
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            role="tab"
-            aria-selected={tab.key === board}
-            data-pressed={tab.key === board}
-            onClick={() => {
-              play("tap");
-              void navigate({ to: "/leaderboard", search: { board: tab.key }, replace: true });
-            }}
-            className={`press shrink-0 cursor-pointer rounded-xl border-[2.5px] border-ink px-3 py-2 font-bold whitespace-nowrap shadow-hard-sm ${tab.key === board ? "bg-marker" : "bg-card"}`}
+      {account === null ? (
+        <Card className="ruled p-10 text-center">
+          <p className="font-display text-xl font-extrabold">Leaderboards need an account.</p>
+          <p className="mt-2 text-ink-soft">
+            Sign in and the games you already played on this device count too.
+          </p>
+          <Button
+            tone="marker"
+            icon="user"
+            className="mt-5"
+            onClick={() => void navigate({ to: "/login" })}
           >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-      <Board board={board} />
-      <p className="mt-4 text-sm text-ink-soft">
-        Score = solve time + {formatDuration(hintPenaltyMs)} per hint +{" "}
-        {formatDuration(checkPenaltyMs)} per check. Lower is better. Solves count once the server
-        has replayed and checked them.
-      </p>
+            Sign in
+          </Button>
+        </Card>
+      ) : (
+        <>
+          <div
+            className="my-5 flex gap-2 overflow-x-auto pt-1 pb-3 pl-1"
+            role="tablist"
+            aria-label="Boards"
+          >
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={tab.key === board}
+                data-pressed={tab.key === board}
+                onClick={() => {
+                  play("tap");
+                  show(tab.key);
+                }}
+                className={`press shrink-0 cursor-pointer rounded-xl border-[2.5px] border-ink px-3 py-2 font-bold whitespace-nowrap shadow-hard-sm ${tab.key === board ? "bg-marker" : "bg-card"}`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {dailyDate !== null && (
+            <DayPicker
+              date={dailyDate}
+              today={today.date}
+              onChange={(date) => show(`${dailyPrefix}${date}`)}
+            />
+          )}
+          <Board board={board} daily={dailyDate !== null} />
+          <p className="mt-4 text-sm text-ink-soft">
+            {dailyDate === null
+              ? "Every solve at this difficulty: the daily puzzles of each day and random puzzles alike. "
+              : "Everyone played the same puzzle that day. "}
+            Score = solve time + {formatDuration(hintPenaltyMs)} per hint +{" "}
+            {formatDuration(checkPenaltyMs)} per check. Lower is better. Solves count once the
+            server has replayed and checked them.
+          </p>
+        </>
+      )}
     </div>
   );
 };
 
+// Picks which day's daily puzzle the board shows; days after today have none yet.
+const DayPicker = (props: {
+  readonly date: string;
+  readonly today: string;
+  readonly onChange: (date: string) => void;
+}) => {
+  const difficulty = dailyDifficulty(weekdayOf(props.date));
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <IconButton
+        icon="chevronLeft"
+        label="Previous day"
+        onClick={() => props.onChange(shiftDate(props.date, -1))}
+      />
+      <input
+        type="date"
+        aria-label="Puzzle day"
+        value={props.date}
+        max={props.today}
+        onChange={(event) => {
+          const date = event.target.value;
+          if (date !== "" && date <= props.today) props.onChange(date);
+        }}
+        className="h-11 rounded-xl border-[2.5px] border-ink bg-card px-3 font-bold shadow-hard-sm outline-none focus-visible:ring-4 focus-visible:ring-marker"
+      />
+      <IconButton
+        icon="chevronRight"
+        label="Next day"
+        disabled={props.date >= props.today}
+        onClick={() => props.onChange(shiftDate(props.date, 1))}
+      />
+      {props.date !== props.today && (
+        <Button size="sm" onClick={() => props.onChange(props.today)}>
+          Today
+        </Button>
+      )}
+      <Chip tone="marker">{difficultyLabels[difficulty]}</Chip>
+    </div>
+  );
+};
+
+// Which puzzle a solve was: on a daily board they are all the same, elsewhere
+// the daily of a given day or a random puzzle.
+const puzzleLabel = (entry: LeaderboardEntry) => {
+  if (entry.dailyDate !== null) return `Daily of ${formatShortDate(entry.dailyDate)}`;
+  return entry.mode === "custom" ? "Custom puzzle" : "Random puzzle";
+};
+
 const features = tableFeatures({});
 const column = createColumnHelper<typeof features, LeaderboardEntry>();
-const details = (entry: LeaderboardEntry) =>
+const details = (entry: LeaderboardEntry, daily: boolean) =>
   [
-    new Date(entry.completedAt).toLocaleDateString(),
+    daily ? "" : puzzleLabel(entry),
+    `solved ${new Date(entry.completedAt).toLocaleDateString()}`,
     `${formatDuration(entry.elapsedMs)} raw`,
     entry.hints ? `${entry.hints} hint${entry.hints > 1 ? "s" : ""}` : "",
     entry.checks ? `${entry.checks} check${entry.checks > 1 ? "s" : ""}` : "",
@@ -83,51 +175,55 @@ const details = (entry: LeaderboardEntry) =>
     .filter(Boolean)
     .join(" · ");
 
-const columns = column.columns([
-  column.display({
-    id: "rank",
-    header: "#",
-    cell: (info) => (
-      <span
-        className={`flex size-10 items-center justify-center rounded-full border-[2.5px] border-ink font-display text-lg font-extrabold ${medals[info.row.index] ?? "bg-card"}`}
-      >
-        {info.row.index + 1}
-      </span>
-    ),
-  }),
-  column.accessor("name", {
-    header: "Player",
-    cell: (info) => (
-      <span className="block min-w-0">
-        <span className="block truncate font-display text-lg font-extrabold">
-          {info.getValue()}
+const columnsFor = (daily: boolean) =>
+  column.columns([
+    column.display({
+      id: "rank",
+      header: "#",
+      cell: (info) => (
+        <span
+          className={`flex size-10 items-center justify-center rounded-full border-[2.5px] border-ink font-display text-lg font-extrabold ${medals[info.row.index] ?? "bg-card"}`}
+        >
+          {info.row.index + 1}
         </span>
-        <span className="block text-xs font-bold text-ink-soft">{details(info.row.original)}</span>
-      </span>
-    ),
-  }),
-  column.display({
-    id: "clean",
-    header: "",
-    cell: (info) =>
-      info.row.original.hints === 0 && info.row.original.checks === 0 ? (
-        <Chip tone="mint">clean</Chip>
-      ) : null,
-  }),
-  column.accessor("scoreMs", {
-    header: "Score",
-    cell: (info) => (
-      <span className="font-display text-2xl font-extrabold tabular-nums">
-        {formatDuration(info.getValue())}
-      </span>
-    ),
-  }),
-]);
+      ),
+    }),
+    column.accessor("name", {
+      header: "Player",
+      cell: (info) => (
+        <span className="block min-w-0">
+          <span className="block truncate font-display text-lg font-extrabold">
+            {info.getValue()}
+          </span>
+          <span className="block text-xs font-bold text-ink-soft">
+            {details(info.row.original, daily)}
+          </span>
+        </span>
+      ),
+    }),
+    column.display({
+      id: "clean",
+      header: "",
+      cell: (info) =>
+        info.row.original.hints === 0 && info.row.original.checks === 0 ? (
+          <Chip tone="mint">clean</Chip>
+        ) : null,
+    }),
+    column.accessor("scoreMs", {
+      header: "Score",
+      cell: (info) => (
+        <span className="font-display text-2xl font-extrabold tabular-nums">
+          {formatDuration(info.getValue())}
+        </span>
+      ),
+    }),
+  ]);
 
-const Board = ({ board }: { board: string }) => {
+const Board = ({ board, daily }: { board: string; daily: boolean }) => {
   const entries = useQuery(leaderboardQuery(board));
   const account = useQuery(accountQuery).data;
   const data = useMemo(() => [...(entries.data ?? [])], [entries.data]);
+  const columns = useMemo(() => columnsFor(daily), [daily]);
   const table = useTable({ features, columns, data });
   if (entries.isPending) return <Spinner label="Reading the board" />;
   if (entries.isError)

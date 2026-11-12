@@ -237,9 +237,9 @@ describe("solve verification", () => {
         category: { kind: "difficulty", difficulty: "easy" },
         limit: 10,
       });
-      expect(top.map((entry) => [entry.gameId, entry.name, entry.scoreMs])).toEqual([
-        ["game-1", "ada", 60_000],
-      ]);
+      expect(
+        top.map((entry) => [entry.gameId, entry.name, entry.scoreMs, entry.dailyDate]),
+      ).toEqual([["game-1", "ada", 60_000, null]]);
       expect(yield* (yield* Rankings).standing({ accountId: "ada", gameId: "game-1" })).toEqual({
         scoreMs: 60_000,
         rank: 1,
@@ -283,6 +283,14 @@ describe("solve verification", () => {
       yield* TestClock.setTime(Date.parse("2026-11-11T10:01:00Z"));
       yield* push("ada", [{ ...tomorrow, updated_at: at(20), completed_at: at(20) }]);
       expect(yield* verified(dailyGameId("2026-11-12"))).toBe(1);
+      // The board says which day the puzzle belongs to, whenever it was solved.
+      const top = yield* (yield* Rankings).top({
+        category: { kind: "daily", date: "2026-11-12" },
+        limit: 10,
+      });
+      expect(top.map((entry) => [entry.gameId, entry.dailyDate])).toEqual([
+        [dailyGameId("2026-11-12"), "2026-11-12"],
+      ]);
     }).pipe(Effect.provide(ServerLayer)),
   );
 

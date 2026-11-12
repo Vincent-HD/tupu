@@ -114,10 +114,7 @@ export const AppShell = () => {
           <Link to="/" aria-label="Tupu home">
             <Wordmark />
           </Link>
-          <nav
-            className={`ml-auto hidden items-center gap-1 ${account ? "md:flex" : ""}`}
-            aria-label="Main"
-          >
+          <nav className="ml-auto hidden items-center gap-1 md:flex" aria-label="Main">
             {navItems.map((item) => (
               <Link
                 key={item.to}
@@ -130,12 +127,19 @@ export const AppShell = () => {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-2 md:ml-2">
-            {account && (
+            {account ? (
               <Link
                 to="/settings"
                 className="hidden max-w-36 items-center gap-1.5 truncate rounded-full border-2 border-ink bg-card px-3 py-1 text-sm font-bold sm:flex"
               >
                 <Icon name="user" /> {account.name}
+              </Link>
+            ) : pathname === "/login" ? null : (
+              <Link
+                to="/login"
+                className="flex items-center gap-1.5 rounded-full border-2 border-ink bg-marker px-3 py-1 text-sm font-bold whitespace-nowrap"
+              >
+                <Icon name="user" /> Sign in
               </Link>
             )}
             {account && <SyncBadge />}
@@ -159,10 +163,12 @@ export const AppShell = () => {
         <Outlet />
       </main>
       <footer className="hidden px-4 pb-8 text-center text-sm text-ink-soft md:block">
-        Your games live on this device and sync to your account whenever you are online.
+        {account
+          ? "Your games live on this device and sync to your account whenever you are online."
+          : "Your games live on this device. Sign in to sync them and join the leaderboards."}
         <span className="mt-1 block">For Tupu, a very good cat. 🐾</span>
       </footer>
-      {!focused && account && (
+      {!focused && (
         <nav
           className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 flex justify-around rounded-2xl border-[2.5px] border-ink bg-card p-1.5 shadow-hard md:hidden"
           aria-label="Main"

@@ -71,6 +71,8 @@ export class Rankings extends Context.Service<
                   "games.checks as checks",
                   "games.completed_at as completedAt",
                   "games.mode as mode",
+                  "games.daily_date as dailyDate",
+                  "games.difficulty as difficulty",
                 ]),
             ),
             input.category,

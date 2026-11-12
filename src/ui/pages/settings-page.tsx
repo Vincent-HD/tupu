@@ -169,10 +169,29 @@ const AccountCard = () => {
     mutationFn: actions.signOut,
     onSuccess: async () => {
       queryClient.clear();
-      await navigate({ to: "/login" });
+      await navigate({ to: "/" });
     },
   });
-  if (!account) return null;
+  if (!account)
+    return (
+      <Card className="p-5">
+        <p className="font-display text-xl font-extrabold">Account</p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <p className="mr-auto text-sm text-ink-soft">
+            You are playing as a guest: your games stay on this device. Sign in to sync them and
+            join the leaderboards.
+          </p>
+          <Button
+            size="sm"
+            tone="marker"
+            icon="user"
+            onClick={() => void navigate({ to: "/login" })}
+          >
+            Sign in
+          </Button>
+        </div>
+      </Card>
+    );
   const leaving = () => {
     if (sync?.pending) setConfirming(true);
     else signOut.mutate();

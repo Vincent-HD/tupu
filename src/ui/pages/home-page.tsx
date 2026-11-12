@@ -73,8 +73,8 @@ export const HomePage = () => {
           </h1>
           <p className="mt-4 max-w-md text-base text-ink-soft sm:text-lg">
             Fill each tile with a number and a color. Rows and columns never repeat either, and no
-            two tiles share the same combination. Play as much as you like, even offline: your games
-            sync to your account.
+            two tiles share the same combination. Play as much as you like, even offline. Sign in to
+            sync your games across devices and join the leaderboards.
           </p>
         </div>
         <DailyCard

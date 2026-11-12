@@ -51,3 +51,11 @@ export const formatLongDate = (isoDate: string) =>
     day: "numeric",
     timeZone: "UTC",
   });
+
+export const formatShortDate = (isoDate: string) =>
+  DateTime.toDateUtc(utcNoon(isoDate)).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });

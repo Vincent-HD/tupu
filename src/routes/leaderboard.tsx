@@ -14,6 +14,6 @@ export const Route = createFileRoute("/leaderboard")({
     ]),
   component: function LeaderboardRoute() {
     const { board } = Route.useSearch();
-    return <LeaderboardPage board={board ?? "difficulty:easy"} />;
+    return <LeaderboardPage board={board} />;
   },
 });

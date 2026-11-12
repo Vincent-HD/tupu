@@ -66,6 +66,9 @@ export const LeaderboardEntry = Schema.Struct({
   checks: Schema.Int,
   completedAt: Schema.String,
   mode: Schema.String,
+  // Which puzzle was solved: the daily of this date, or a random one when null.
+  dailyDate: Schema.NullOr(Schema.String),
+  difficulty: Schema.NullOr(Schema.String),
 });
 export type LeaderboardEntry = typeof LeaderboardEntry.Type;
 

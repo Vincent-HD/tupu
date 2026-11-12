@@ -8,8 +8,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   beforeLoad: async ({ context, location }) => {
     if (location.pathname === "/login") return;
     const account = await context.queryClient.ensureQueryData(accountQuery);
-    // A brand-new account still has to pick the name shown on leaderboards.
-    if (account === null || account.name === "") throw redirect({ to: "/login" });
+    // Guests play without an account; a brand-new account still has to pick
+    // the name shown on leaderboards.
+    if (account !== null && account.name === "") throw redirect({ to: "/login" });
   },
   component: AppShell,
   notFoundComponent: NotFoundPage,

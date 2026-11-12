@@ -1,6 +1,6 @@
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Predicate, Schema } from "effect";
 import { useState, type ReactNode } from "react";
 import { DisplayName, Email } from "../../api/rpc.ts";
@@ -92,7 +92,7 @@ export const LoginPage = () => {
     );
 
   return (
-    <Shell>
+    <Shell guest={account.data === null && step.kind === "email"}>
       {step.kind === "email" && (
         <EmailStep onSent={(email) => setStep({ kind: "code", email })} onSignedIn={done} />
       )}
@@ -110,12 +110,17 @@ export const LoginPage = () => {
   );
 };
 
-const Shell = (props: { readonly children: ReactNode }) => (
+const Shell = (props: { readonly children: ReactNode; readonly guest?: boolean }) => (
   <div className="mx-auto flex w-full max-w-md flex-col items-center gap-6 pt-6">
     <Card className="ruled w-full p-6" tilt="left">
       <span className="tape -top-3 left-10" />
       {props.children}
     </Card>
+    {props.guest && (
+      <Link to="/" className="font-bold underline">
+        Play without an account
+      </Link>
+    )}
     <p className="px-4 text-center text-sm text-ink-soft">
       No password. Sign in with a code sent to your email, or with a passkey: your fingerprint, face
       or screen lock.
@@ -152,8 +157,9 @@ const EmailStep = (props: {
           void form.handleSubmit();
         }}
       >
-        <Heading eyebrow="Welcome" title="Sign in to play">
-          Your games sync to your account. Once signed in, Tupu keeps working offline.
+        <Heading eyebrow="Welcome" title="Sign in">
+          Sync your games across devices and join the leaderboards. Games already played on this
+          device move into your account.
         </Heading>
         <form.Field name="email">
           {(field) => (

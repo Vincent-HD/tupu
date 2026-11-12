@@ -235,3 +235,38 @@ describe("offline play and reconciliation", () => {
     ),
   );
 });
+
+describe("guests", () => {
+  // Without an account nothing leaves the device; signing in moves the games
+  // played so far into the account.
+  it.live("play offline, then bring their games into the account they sign in to", () =>
+    Effect.gen(function* () {
+      const server = yield* makeServer;
+      const scope = yield* Effect.scope;
+      const fresh = Layer.buildWithScope(deviceLayer(server), scope).pipe(Effect.orDie);
+      const guest = yield* fresh;
+      const daily = dailyGameId("2026-11-10");
+      yield* Effect.gen(function* () {
+        yield* Effect.flatMap(Games, (games) => games.start({ mode: "daily", date: "2026-11-10" }));
+        yield* solve(daily);
+        yield* sync;
+        expect((yield* Effect.flatMap(Sync, (service) => service.state)).status).toBe("signed-out");
+        expect(yield* pending).toBe(1);
+        yield* signUp({ server, email, name: "Ada" }).pipe(Effect.orDie);
+        yield* sync;
+        expect(yield* pending).toBe(0);
+        const board = yield* Effect.flatMap(Api, (api) =>
+          api.Leaderboard({ category: { kind: "daily", date: "2026-11-10" }, limit: 10 }),
+        );
+        expect(board.map((entry) => [entry.gameId, entry.name])).toEqual([[daily, "Ada"]]);
+      }).pipe(Effect.provide(guest));
+
+      const other = yield* fresh;
+      yield* signInWithCode({ server, email }).pipe(Effect.provide(other), Effect.orDie);
+      yield* sync.pipe(Effect.provide(other));
+      expect(
+        (yield* local(daily).pipe(Effect.provide(other))).pipe(Option.map((game) => game.status)),
+      ).toEqual(Option.some("solved"));
+    }).pipe(Effect.scoped),
+  );
+});
