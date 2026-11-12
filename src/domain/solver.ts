@@ -33,7 +33,10 @@ export interface Deduction {
   readonly technique: Technique;
   readonly level: LogicLevel;
   readonly line?: Line;
+  // Filled in along with `value`: the other half of the pair.
   readonly partner?: number;
+  // What the tile already held in the other layer when the deduction ran.
+  readonly holding?: number;
   readonly reasons: ReadonlyArray<number>;
 }
 
@@ -169,6 +172,20 @@ class Analysis {
   blockerFor(layer: Layer, line: Line, value: number) {
     return lineCells(this.size, line).find((cell) => this.value(layer, cell) === value);
   }
+
+  // The tiles holding the pairs that keep `value` out of `cell`: the pair with
+  // the tile's own partner when it has one, else one per partner it could take.
+  pairBlockers(layer: Layer, cell: number, value: number) {
+    const known = this.value(otherLayer(layer), cell);
+    const partners = known >= 0 ? 1 << known : this.allowed(otherLayer(layer), cell);
+    const blockers: Array<number> = [];
+    for (let partner = 0; partner < this.size; partner++) {
+      if (!(partners & (1 << partner))) continue;
+      const holder = this.pairCell[pairIndex({ size: this.size, layer, value, partner })] ?? -1;
+      if (holder >= 0) blockers.push(holder);
+    }
+    return blockers;
+  }
 }
 
 type Finder = (analysis: Analysis) => Deduction | undefined;
@@ -223,12 +240,7 @@ const hiddenSingleWith =
                 crossLine(analysis.size, line, other),
                 value,
               );
-              if (blocker !== undefined) return [blocker];
-              const partner = analysis.value(otherLayer(layer), other);
-              if (partner < 0) return [];
-              const pairCell =
-                analysis.pairCell[pairIndex({ size: analysis.size, layer, value, partner })] ?? -1;
-              return pairCell >= 0 ? [pairCell, other] : [other];
+              return blocker === undefined ? analysis.pairBlockers(layer, other, value) : [blocker];
             });
           return deduction({ cell, layer, value, technique, line, reasons });
         }
@@ -263,18 +275,16 @@ const pairExclusion: Finder = (analysis) => {
         if (allowed & (1 << value) && analysis.pairAllowed(layer, cell, value))
           remaining |= 1 << value;
       if (bitCount(remaining) !== 1) continue;
-      const partner = analysis.value(otherLayer(layer), cell);
+      const holding = analysis.value(otherLayer(layer), cell);
       const pairReasons: Array<number> = [];
-      for (let value = 0; value < analysis.size; value++) {
-        if (!(allowed & (1 << value)) || remaining & (1 << value) || partner < 0) continue;
-        const pairCell =
-          analysis.pairCell[pairIndex({ size: analysis.size, layer, value, partner })] ?? -1;
-        if (pairCell >= 0) pairReasons.push(pairCell);
-      }
+      for (let value = 0; value < analysis.size; value++)
+        if (allowed & (1 << value) && !(remaining & (1 << value)))
+          pairReasons.push(...analysis.pairBlockers(layer, cell, value));
       return deduction({
         cell,
         layer,
         value: singleBit(remaining),
+        ...(holding >= 0 ? { holding } : {}),
         technique: "pair-exclusion",
         reasons: [...analysis.peersWithValue(layer, cell), ...pairReasons],
       });
@@ -303,10 +313,14 @@ const onlyPlaceForPair: Finder = (analysis) => {
         value: numberKnown ? color : number,
         partner: numberKnown ? number : color,
         technique: "only-place-for-pair",
-        reasons: [
-          ...lineCells(size, { kind: "row", index: Math.floor(cell / size) }),
-          ...lineCells(size, { kind: "column", index: cell % size }),
-        ].filter((other) => other !== cell),
+        // Every other tile holds another number or color, or shares a line
+        // with this number or this color.
+        reasons: Array.from({ length: size * size }, (_, other) => other).filter(
+          (other) =>
+            other !== cell &&
+            (analysis.value("number", other) === number ||
+              analysis.value("color", other) === color),
+        ),
       });
     }
   return undefined;

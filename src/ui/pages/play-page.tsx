@@ -185,6 +185,7 @@ const GameView = ({ game }: { game: GameRecord }) => {
           return;
         }
         case "clear":
+        case "erase-marked":
           play("erase");
           return;
         case "undo":
@@ -495,6 +496,15 @@ const GameView = ({ game }: { game: GameRecord }) => {
                   ? "Clean so far. Everything placed matches the solution."
                   : `${session.marked.length} value${session.marked.length === 1 ? "" : "s"} need another look.`}
               </p>
+              {session.checkResult === "fail" && (
+                <Button
+                  size="sm"
+                  tone="ink"
+                  onClick={() => act({ type: "erase-marked", at: now() })}
+                >
+                  Erase them
+                </Button>
+              )}
               <IconButton icon="x" label="Dismiss" onClick={() => act({ type: "dismiss-hint" })} />
             </Card>
           )}

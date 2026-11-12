@@ -35,3 +35,35 @@ describe("session selection", () => {
     }),
   );
 });
+
+describe("check results", () => {
+  const withMistake = Effect.map(newSession, (session) => {
+    const cell = session.puzzle.givenNumbers.findIndex((given) => !given);
+    const wrong = ((session.puzzle.solutionNumbers[cell] ?? 0) + 1) % session.puzzle.size;
+    const selected = { ...session, selected: cell };
+    const placed = reduce(selected, { type: "place", layer: "number", value: wrong, at: 1 });
+    return { checked: reduce(placed, { type: "check" }), cell };
+  });
+
+  it.effect("closing a failed check takes the crosses off the board", () =>
+    Effect.gen(function* () {
+      const { checked, cell } = yield* withMistake;
+      expect(checked.marked).toEqual([{ cell, layer: "number" }]);
+      const closed = reduce(checked, { type: "dismiss-hint" });
+      expect(closed.marked).toEqual([]);
+      expect(closed.checkResult).toBeNull();
+      expect(closed.board).toEqual(checked.board);
+    }),
+  );
+
+  it.effect("erasing a failed check clears the wrong values in one undoable step", () =>
+    Effect.gen(function* () {
+      const { checked, cell } = yield* withMistake;
+      const erased = reduce(checked, { type: "erase-marked", at: 2 });
+      expect(erased.board.numbers[cell]).toBeNull();
+      expect(erased.marked).toEqual([]);
+      expect(erased.checkResult).toBeNull();
+      expect(reduce(erased, { type: "undo", at: 3 }).board).toEqual(checked.board);
+    }),
+  );
+});

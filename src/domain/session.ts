@@ -47,6 +47,7 @@ export type Action =
   | { readonly type: "check" }
   | { readonly type: "hint" }
   | { readonly type: "apply-hint"; readonly at: number }
+  | { readonly type: "erase-marked"; readonly at: number }
   | { readonly type: "dismiss-hint" }
   | { readonly type: "restart"; readonly at: number };
 
@@ -130,6 +131,20 @@ const commit = (session: Session, changes: ReadonlyArray<Change>, at: number): S
 
 const editable = (session: Session, cell: number, layer: Layer) =>
   !isGiven(session.puzzle, cell, layer);
+
+const erase = (session: Session, values: ReadonlyArray<WrongValue>, at: number): Session => ({
+  ...commit(
+    session,
+    values.map((value) => ({
+      cell: value.cell,
+      layer: value.layer,
+      before: valueAt(session.board, value.cell, value.layer),
+      after: null,
+    })),
+    at,
+  ),
+  marked: [],
+});
 
 export const reduce = (session: Session, action: Action): Session => {
   if (
@@ -218,23 +233,12 @@ export const reduce = (session: Session, action: Action): Session => {
         selected: deduction.cell,
       };
     }
+    case "erase-marked":
+      return { ...erase(session, session.marked, action.at), checkResult: null };
     case "apply-hint": {
       const hint = session.hint;
       if (!hint) return session;
-      if (hint.kind === "mistakes")
-        return {
-          ...commit(
-            session,
-            (hint.mistakes ?? []).map((mistake) => ({
-              cell: mistake.cell,
-              layer: mistake.layer,
-              before: valueAt(session.board, mistake.cell, mistake.layer),
-              after: null,
-            })),
-            action.at,
-          ),
-          marked: [],
-        };
+      if (hint.kind === "mistakes") return erase(session, hint.mistakes ?? [], action.at);
       const deduction = hint.deduction;
       if (!deduction) return { ...session, hint: null };
       const changes: Array<Change> = [
@@ -256,8 +260,9 @@ export const reduce = (session: Session, action: Action): Session => {
       }
       return commit(session, changes, action.at);
     }
+    // Closing the hint or the check result also takes the crosses off the board.
     case "dismiss-hint":
-      return { ...session, hint: null, checkResult: null };
+      return { ...session, hint: null, checkResult: null, marked: [] };
     case "restart": {
       const changes = (["number", "color"] as const).flatMap((layer) =>
         Array.from({ length: size * size }, (_, cell) => cell)
